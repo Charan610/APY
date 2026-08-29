@@ -85,7 +85,7 @@ class TursoCursor:
         with httpx.Client(timeout=10.0) as http_client:
             res = http_client.post(endpoint, json=payload, headers=headers)
             if res.status_code != 200:
-                raise RuntimeError(f"Turso query failed (HTTP {res.status_code}): {res.text}")
+                raise RuntimeError(f"Turso HTTP Error {res.status_code}: {res.text}")
             
             data = res.json()
             results = data.get("results", [])
@@ -98,7 +98,12 @@ class TursoCursor:
                 raise RuntimeError(f"Turso SQL Error: {err_msg}")
             
             resp_data = first_res.get("response", {}).get("result", {})
-            self.lastrowid = resp_data.get("last_insert_rowid")
+            lid = resp_data.get("last_insert_rowid")
+            if lid is not None:
+                try:
+                    self.lastrowid = int(lid)
+                except (ValueError, TypeError):
+                    self.lastrowid = None
             
             cols = [c.get("name") for c in resp_data.get("cols", [])]
             raw_rows = resp_data.get("rows", [])
@@ -166,55 +171,32 @@ class TursoConnection:
         pass
 
 # ---------------------------------------------------------------------------
-# Resilient Database Connection Manager (with Auto-Fallback)
+# Database Connection Manager
 # ---------------------------------------------------------------------------
-_USE_FALLBACK_SQLITE = False
-
-def get_local_sqlite_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA foreign_keys=ON;")
-    except Exception:
-        pass
-    return conn
-
 def is_turso_configured() -> bool:
-    global _USE_FALLBACK_SQLITE
-    if _USE_FALLBACK_SQLITE:
-        return False
     return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and len(TURSO_AUTH_TOKEN) > 20)
 
 def get_db_connection():
-    global _USE_FALLBACK_SQLITE
     if is_turso_configured():
-        try:
-            return TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
-        except Exception as e:
-            print("Turso init failed, falling back to local SQLite:", e)
-            _USE_FALLBACK_SQLITE = True
-            return get_local_sqlite_connection()
+        return TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
     else:
-        return get_local_sqlite_connection()
+        conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
+        except Exception:
+            pass
+        return conn
 
 @contextmanager
 def get_db() -> Generator[Any, None, None]:
-    global _USE_FALLBACK_SQLITE
     conn = get_db_connection()
     try:
         yield conn
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        # If Turso query failed due to connection/token, fallback to local SQLite
-        if isinstance(conn, TursoConnection):
-            print("Turso operation error, falling back to local SQLite:", e)
-            _USE_FALLBACK_SQLITE = True
-            # Retry operation with local SQLite
-            with get_db() as fallback_conn:
-                yield fallback_conn
-                return
         raise
     finally:
         conn.close()
@@ -291,11 +273,11 @@ def backup_db() -> str:
     backup_path = os.path.join(BACKUP_DIR, backup_filename)
     
     if not is_turso_configured():
-        src_conn = get_local_sqlite_connection()
+        conn = sqlite3.connect(DB_PATH)
         dst_conn = sqlite3.connect(backup_path)
         try:
-            src_conn.backup(dst_conn)
+            conn.backup(dst_conn)
         finally:
             dst_conn.close()
-            src_conn.close()
+            conn.close()
     return backup_path

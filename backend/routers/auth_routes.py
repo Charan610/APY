@@ -125,6 +125,8 @@ def register(req: RegisterRequest):
             """,
             (req.register_number, pin_hash, section_id, req.baseline_attended or 0, req.baseline_total or 0, req.baseline_date)
         )
+        user_id = cursor.lastrowid
+
         cursor.execute(
             """
             SELECT s.branch, s.section_label 
