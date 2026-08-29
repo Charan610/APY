@@ -236,7 +236,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
 
               {/* Instagram ID Link */}
               <a
-                href="https://instagram.com/itz_me_charan_610"
+                href="https://www.instagram.com/charan__3_/"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -258,7 +258,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
                   <InstagramIcon />
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Developer Instagram</div>
-                    <div style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>@itz_me_charan_610</div>
+                    <div style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>@charan__3_</div>
                   </div>
                 </div>
                 <ExternalLink size={15} color="var(--ink-soft)" />
