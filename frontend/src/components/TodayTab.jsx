@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Check, X, Coffee, ChevronLeft, ChevronRight, CheckCheck, Lock } from 'lucide-react';
+import { Check, X, Coffee, ChevronLeft, ChevronRight, CheckCheck, Lock, UserX } from 'lucide-react';
 
 export default function TodayTab({ user, onAttendanceUpdated }) {
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -94,30 +94,37 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
     return match ? match.status : null;
   };
 
-  const handleSetBlockStatus = async (blockId, newStatus) => {
+  const handleSetBlockStatus = async (blockId, clickedStatus) => {
     if (!isDateEditable) return;
 
+    const currentStatus = getBlockStatus(blockId);
+    // Toggle: if clicking the currently active status, unmark it
+    const targetStatus = (currentStatus === clickedStatus) ? 'unmarked' : clickedStatus;
+
+    // Instant optimistic UI update (0ms lag)
     const currentEntries = [...(dailyLogs[currentDate] || [])];
     const idx = currentEntries.findIndex(e => e.block_id === blockId);
-    if (idx >= 0) {
-      currentEntries[idx] = { ...currentEntries[idx], status: newStatus };
+    if (targetStatus === 'unmarked') {
+      if (idx >= 0) currentEntries.splice(idx, 1);
     } else {
-      currentEntries.push({ block_id: blockId, status: newStatus });
+      if (idx >= 0) {
+        currentEntries[idx] = { ...currentEntries[idx], status: targetStatus };
+      } else {
+        currentEntries.push({ block_id: blockId, status: targetStatus });
+      }
     }
 
     setDailyLogs(prev => ({ ...prev, [currentDate]: currentEntries }));
+    setFeedback(targetStatus === 'unmarked' ? 'Unmarked' : `Saved ${targetStatus.toUpperCase()}`);
+    setTimeout(() => setFeedback(''), 1500);
 
+    // Non-blocking background save
     try {
-      setSaving(true);
-      await api.markAttendance(currentDate, [{ block_id: blockId, status: newStatus }]);
-      setFeedback(`Saved ${newStatus.toUpperCase()}`);
-      setTimeout(() => setFeedback(''), 2000);
+      await api.markAttendance(currentDate, [{ block_id: blockId, status: targetStatus }]);
       onAttendanceUpdated();
     } catch (err) {
-      alert(err.message || 'Failed to save');
+      console.error('Failed to save attendance:', err);
       loadLogs();
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -126,12 +133,12 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
 
     const entries = currentBlocks.map(b => ({ block_id: b.id, status }));
     setDailyLogs(prev => ({ ...prev, [currentDate]: entries }));
+    setFeedback(`Marked All ${status.toUpperCase()}`);
+    setTimeout(() => setFeedback(''), 1500);
 
     try {
       setSaving(true);
       await api.markAttendance(currentDate, entries);
-      setFeedback(`Marked All ${status.toUpperCase()}`);
-      setTimeout(() => setFeedback(''), 2000);
       onAttendanceUpdated();
     } catch (err) {
       alert(err.message || 'Failed to mark all');
@@ -204,9 +211,12 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
 
         {/* Action helper buttons */}
         {isDateEditable && !isSunday && currentBlocks.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.85rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.85rem', flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('present')} disabled={saving}>
               <CheckCheck size={14} color="var(--good)" /> All Present
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('absent')} disabled={saving}>
+              <UserX size={14} color="var(--bad)" /> All Absent
             </button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('holiday')} disabled={saving}>
               <Coffee size={14} color="var(--accent-gold)" /> Day Holiday

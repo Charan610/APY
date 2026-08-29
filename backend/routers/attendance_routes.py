@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
 
 class MarkAttendanceItem(BaseModel):
     block_id: int
-    status: str = Field(..., pattern="^(present|absent|holiday)$")
+    status: str = Field(..., pattern="^(present|absent|holiday|unmarked)$")
 
 class MarkAttendanceRequest(BaseModel):
     log_date: str = Field(..., pattern="^\\d{4}-\\d{2}-\\d{2}$") # YYYY-MM-DD
@@ -150,17 +150,23 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
                     detail=f"Block ID {entry.block_id} does not belong to user's section."
                 )
                 
-            cursor.execute(
-                """
-                INSERT INTO daily_logs (user_id, log_date, block_id, status, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id, log_date, block_id) 
-                DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP
-                """,
-                (user_id, req.log_date, entry.block_id, entry.status)
-            )
+            if entry.status == "unmarked":
+                cursor.execute(
+                    "DELETE FROM daily_logs WHERE user_id = ? AND log_date = ? AND block_id = ?",
+                    (user_id, req.log_date, entry.block_id)
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO daily_logs (user_id, log_date, block_id, status, updated_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(user_id, log_date, block_id) 
+                    DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (user_id, req.log_date, entry.block_id, entry.status)
+                )
             
-        return {"status": "success", "message": f"Saved {len(req.entries)} attendance entries for {req.log_date}."}
+        return {"status": "success", "message": f"Updated attendance entries for {req.log_date}."}
 
 @router.get("/summary")
 def get_attendance_summary(current_user: dict = Depends(get_current_user)):
