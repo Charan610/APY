@@ -4,15 +4,23 @@ import TimetableBuilder from './TimetableBuilder';
 import { User, Lock, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function AuthModal({ onAuthSuccess }) {
+  const DEFAULT_SECTIONS = [
+    { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 26 },
+    { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 26 },
+    { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 26 },
+    { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 26 },
+    { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 26 }
+  ];
+
   const [mode, setMode] = useState('login');
-  const [sections, setSections] = useState([]);
+  const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Form State
   const [regNo, setRegNo] = useState('');
   const [pin, setPin] = useState('');
-  const [selectedSectionId, setSelectedSectionId] = useState('');
+  const [selectedSectionId, setSelectedSectionId] = useState('1');
 
   // Custom section onboarding
   const [isCustomSection, setIsCustomSection] = useState(false);
@@ -32,12 +40,11 @@ export default function AuthModal({ onAuthSuccess }) {
   const loadSections = async () => {
     try {
       const data = await api.getSections();
-      setSections(data.sections || []);
-      if (data.sections?.length > 0) {
-        setSelectedSectionId(data.sections[0].id);
+      if (data.sections && data.sections.length > 0) {
+        setSections(data.sections);
       }
     } catch (err) {
-      console.error(err);
+      console.error('API sections notice:', err);
     }
   };
 
