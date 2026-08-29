@@ -36,6 +36,21 @@ app.include_router(auth_router)
 app.include_router(section_router)
 app.include_router(attendance_router)
 
+from fastapi.responses import JSONResponse
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    print("UNHANDLED SERVER ERROR:", exc)
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"Server Error: {str(exc)}",
+            "type": type(exc).__name__
+        }
+    )
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "app": "ATT PER Y"}

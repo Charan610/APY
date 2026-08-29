@@ -2,13 +2,14 @@ import sqlite3
 import os
 import shutil
 import httpx
+import traceback
 from datetime import datetime
 from typing import Generator, Any, List, Optional
 from contextlib import contextmanager
 
 # Turso Cloud SQLite credentials (for 100% persistent cloud database on Vercel / serverless)
-TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "").strip()
-TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "").strip().strip("'\"")
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip().strip("'\"")
 
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB_PATH = os.path.join(DB_DIR, "attendance.db")
@@ -63,7 +64,6 @@ class TursoCursor:
             else:
                 args.append({"type": "text", "value": str(p)})
 
-        # Convert question marks to positional or send directly
         endpoint = self.client.pipeline_url
         headers = {
             "Authorization": f"Bearer {self.client.auth_token}",
@@ -82,45 +82,50 @@ class TursoCursor:
             ]
         }
 
-        with httpx.Client(timeout=15.0) as http_client:
-            res = http_client.post(endpoint, json=payload, headers=headers)
-            if res.status_code != 200:
-                raise RuntimeError(f"Turso query failed ({res.status_code}): {res.text}")
-            
-            data = res.json()
-            results = data.get("results", [])
-            if not results:
-                return self
-            
-            first_res = results[0]
-            if first_res.get("type") == "error":
-                raise RuntimeError(f"Turso SQL Error: {first_res.get('error', {}).get('message')}")
-            
-            resp_data = first_res.get("response", {}).get("result", {})
-            self.lastrowid = resp_data.get("last_insert_rowid")
-            
-            cols = [c.get("name") for c in resp_data.get("cols", [])]
-            raw_rows = resp_data.get("rows", [])
-            
-            parsed_rows = []
-            for r in raw_rows:
-                vals = []
-                for cell in r:
-                    c_type = cell.get("type")
-                    val = cell.get("value")
-                    if c_type == "integer" and val is not None:
-                        vals.append(int(val))
-                    elif c_type == "float" and val is not None:
-                        vals.append(float(val))
-                    elif c_type == "null":
-                        vals.append(None)
-                    else:
-                        vals.append(val)
-                parsed_rows.append(TursoRow(cols, vals))
+        try:
+            with httpx.Client(timeout=15.0) as http_client:
+                res = http_client.post(endpoint, json=payload, headers=headers)
+                if res.status_code != 200:
+                    raise RuntimeError(f"Turso query failed (HTTP {res.status_code}): {res.text}")
                 
-            self._rows = parsed_rows
-            self._row_idx = 0
-            return self
+                data = res.json()
+                results = data.get("results", [])
+                if not results:
+                    return self
+                
+                first_res = results[0]
+                if first_res.get("type") == "error":
+                    err_msg = first_res.get("error", {}).get("message", "Unknown SQL Error")
+                    raise RuntimeError(f"Turso SQL Error: {err_msg}")
+                
+                resp_data = first_res.get("response", {}).get("result", {})
+                self.lastrowid = resp_data.get("last_insert_rowid")
+                
+                cols = [c.get("name") for c in resp_data.get("cols", [])]
+                raw_rows = resp_data.get("rows", [])
+                
+                parsed_rows = []
+                for r in raw_rows:
+                    vals = []
+                    for cell in r:
+                        c_type = cell.get("type")
+                        val = cell.get("value")
+                        if c_type == "integer" and val is not None:
+                            vals.append(int(val))
+                        elif c_type == "float" and val is not None:
+                            vals.append(float(val))
+                        elif c_type == "null":
+                            vals.append(None)
+                        else:
+                            vals.append(val)
+                    parsed_rows.append(TursoRow(cols, vals))
+                    
+                self._rows = parsed_rows
+                self._row_idx = 0
+                return self
+        except Exception as e:
+            print(f"Error executing Turso SQL [{sql}]: {e}")
+            raise
 
     def fetchone(self) -> Optional[TursoRow]:
         if self._row_idx < len(self._rows):
@@ -136,12 +141,17 @@ class TursoCursor:
 
 class TursoConnection:
     def __init__(self, db_url: str, auth_token: str):
-        # Format https://<host>/v2/pipeline
-        clean_url = db_url.replace("libsql://", "https://").replace("http://", "https://")
-        if not clean_url.endswith("/v2/pipeline"):
-            clean_url = clean_url.rstrip("/") + "/v2/pipeline"
-        self.pipeline_url = clean_url
-        self.auth_token = auth_token
+        url = db_url.strip()
+        if url.startswith("libsql://"):
+            url = "https://" + url[len("libsql://"):]
+        elif not url.startswith("http://") and not url.startswith("https://"):
+            url = "https://" + url
+            
+        if not url.endswith("/v2/pipeline"):
+            url = url.rstrip("/") + "/v2/pipeline"
+            
+        self.pipeline_url = url
+        self.auth_token = auth_token.strip()
 
     def cursor(self) -> TursoCursor:
         return TursoCursor(self)
