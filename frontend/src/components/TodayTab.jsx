@@ -16,8 +16,12 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
   minDateObj.setDate(todayObj.getDate() - 7);
   const minDateStr = minDateObj.toISOString().split('T')[0];
 
+  const maxDateObj = new Date();
+  maxDateObj.setDate(todayObj.getDate() + 7);
+  const maxDateStr = maxDateObj.toISOString().split('T')[0];
+
   const isCoveredByBaseline = Boolean(user?.baseline_date && currentDate <= user.baseline_date);
-  const isDateEditable = currentDate >= minDateStr && currentDate <= todayStr && !isCoveredByBaseline;
+  const isDateEditable = currentDate >= minDateStr && currentDate <= maxDateStr && !isCoveredByBaseline;
 
   useEffect(() => {
     if (user?.section_id) {
@@ -52,9 +56,10 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
 
   const getWeekDays = () => {
     const days = [];
-    for (let i = 7; i >= 0; i--) {
+    // Show from 2 days back up to next 7 days (including next Saturday)
+    for (let i = -2; i <= 7; i++) {
       const d = new Date();
-      d.setDate(todayObj.getDate() - i);
+      d.setDate(todayObj.getDate() + i);
       const iso = d.toISOString().split('T')[0];
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const isPastBaseline = Boolean(user?.baseline_date && iso <= user.baseline_date);
@@ -162,7 +167,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
               {currentDate === todayStr && <span className="card-header-badge good">Today</span>}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-              Section {user?.section_label} · {feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Included in Baseline Cutoff' : '7-Day Edit Window')}
+              Section {user?.section_label} · {feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Included in Baseline Cutoff' : 'Active Schedule Window')}
             </div>
           </div>
 
@@ -174,7 +179,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
               type="button"
               className="btn-icon"
               onClick={() => shiftDate(1)}
-              disabled={currentDate >= todayStr}
+              disabled={currentDate >= maxDateStr}
               title="Next Day"
             >
               <ChevronRight size={16} />

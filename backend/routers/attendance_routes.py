@@ -19,7 +19,7 @@ class MarkAttendanceRequest(BaseModel):
 def validate_edit_window(log_date_str: str, baseline_date_str: Optional[str] = None):
     """
     Enforces server-side edit window:
-    1. today - 7 days <= log_date <= today
+    1. today - 7 days <= log_date <= today + 7 days (next Saturday/week)
     2. If baseline_date is set, log_date MUST be strictly > baseline_date
        (Dates on or before baseline_date are covered in historical baseline totals and locked).
     """
@@ -30,11 +30,12 @@ def validate_edit_window(log_date_str: str, baseline_date_str: Optional[str] = N
         
     today = date.today()
     min_date = today - timedelta(days=7)
+    max_date = today + timedelta(days=7)
     
-    if log_date < min_date or log_date > today:
+    if log_date < min_date or log_date > max_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Edit window violation: log_date {log_date_str} must be between {min_date.isoformat()} and {today.isoformat()} (within the last 7 days)."
+            detail=f"Edit window violation: log_date {log_date_str} must be between {min_date.isoformat()} and {max_date.isoformat()}."
         )
         
     if baseline_date_str:
