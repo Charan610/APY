@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="CSE Attendance Register API",
+    title="ATT PER Y API",
     description="Multi-user attendance tracking API with SQLite WAL mode, FAT forecaster, and 75% threshold calculator",
     version="1.0.0",
     lifespan=lifespan
@@ -38,7 +38,7 @@ app.include_router(attendance_router)
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "app": "CSE Attendance Register"}
+    return {"status": "ok", "app": "ATT PER Y"}
 
 @app.post("/api/admin/backup")
 def trigger_backup(current_user: dict = Depends(get_current_user)):

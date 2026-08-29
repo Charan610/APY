@@ -62,7 +62,7 @@ export default function App() {
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
           <div className="brand-crest" style={{ animation: 'spin 2s linear infinite' }}>₹</div>
-          <div className="font-serif" style={{ fontSize: '1rem', fontWeight: 600 }}>Loading Attendance Register...</div>
+          <div className="font-serif" style={{ fontSize: '1rem', fontWeight: 600 }}>Loading ATT PER Y...</div>
         </div>
       </div>
     );

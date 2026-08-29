@@ -7,7 +7,7 @@ export default function Header({ user, onOpenSettings, onLogout }) {
       <div className="brand-section">
         <div className="brand-crest">₹</div>
         <div>
-          <div className="brand-heading font-serif">Attendance Register</div>
+          <div className="brand-heading font-serif">ATT PER Y</div>
           <div className="brand-subline">
             {user ? `${user.branch || 'CSE'} — Sec ${user.section_label || 'C'} · ${user.register_number}` : 'CSE Department'}
           </div>

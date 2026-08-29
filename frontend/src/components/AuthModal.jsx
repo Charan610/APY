@@ -143,7 +143,7 @@ export default function AuthModal({ onAuthSuccess }) {
           <div className="brand-crest" style={{ margin: '0 auto 0.75rem', width: '48px', height: '48px', fontSize: '1.5rem' }}>
             <span>₹</span>
           </div>
-          <h2 className="heading-ledger" style={{ fontSize: '1.35rem' }}>CSE Attendance Register</h2>
+          <h2 className="heading-ledger" style={{ fontSize: '1.35rem' }}>ATT PER Y</h2>
           <p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
             Academic Ledger & Bunk Forecaster
           </p>
@@ -208,7 +208,7 @@ export default function AuthModal({ onAuthSuccess }) {
             </div>
 
             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={loading}>
-              {loading ? 'Authenticating...' : 'Access My Attendance Register'}
+              {loading ? 'Authenticating...' : 'Access ATT PER Y'}
             </button>
           </form>
         ) : (
