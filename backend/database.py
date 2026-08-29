@@ -1,14 +1,19 @@
 import sqlite3
 import os
 import shutil
+import httpx
 from datetime import datetime
-from typing import Generator
+from typing import Generator, Any, List, Optional
 from contextlib import contextmanager
+
+# Turso Cloud SQLite credentials (for 100% persistent cloud database on Vercel / serverless)
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "").strip()
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
 
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB_PATH = os.path.join(DB_DIR, "attendance.db")
 
-# If running on Vercel / Serverless environment (where root filesystem is read-only)
+# Fallback local SQLite path
 if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
     TMP_DIR = "/tmp/attendance_data"
     os.makedirs(TMP_DIR, exist_ok=True)
@@ -25,15 +30,153 @@ else:
 
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
-def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-    return conn
+# ---------------------------------------------------------------------------
+# Turso Cloud SQLite HTTP Pipeline Adapter (Zero-dependency Serverless Driver)
+# ---------------------------------------------------------------------------
+class TursoRow(dict):
+    def __init__(self, cols: List[str], values: List[Any]):
+        super().__init__(zip(cols, values))
+        self._values = list(values)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        return super().__getitem__(key)
+
+class TursoCursor:
+    def __init__(self, client: 'TursoConnection'):
+        self.client = client
+        self.lastrowid: Optional[int] = None
+        self._rows: List[TursoRow] = []
+        self._row_idx: int = 0
+
+    def execute(self, sql: str, params: tuple = ()):
+        # Normalize params for Turso JSON pipeline
+        args = []
+        for p in params:
+            if p is None:
+                args.append({"type": "null"})
+            elif isinstance(p, int):
+                args.append({"type": "integer", "value": str(p)})
+            elif isinstance(p, float):
+                args.append({"type": "float", "value": p})
+            else:
+                args.append({"type": "text", "value": str(p)})
+
+        # Convert question marks to positional or send directly
+        endpoint = self.client.pipeline_url
+        headers = {
+            "Authorization": f"Bearer {self.client.auth_token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "requests": [
+                {
+                    "type": "execute",
+                    "stmt": {
+                        "sql": sql,
+                        "args": args
+                    }
+                },
+                {"type": "close"}
+            ]
+        }
+
+        with httpx.Client(timeout=15.0) as http_client:
+            res = http_client.post(endpoint, json=payload, headers=headers)
+            if res.status_code != 200:
+                raise RuntimeError(f"Turso query failed ({res.status_code}): {res.text}")
+            
+            data = res.json()
+            results = data.get("results", [])
+            if not results:
+                return self
+            
+            first_res = results[0]
+            if first_res.get("type") == "error":
+                raise RuntimeError(f"Turso SQL Error: {first_res.get('error', {}).get('message')}")
+            
+            resp_data = first_res.get("response", {}).get("result", {})
+            self.lastrowid = resp_data.get("last_insert_rowid")
+            
+            cols = [c.get("name") for c in resp_data.get("cols", [])]
+            raw_rows = resp_data.get("rows", [])
+            
+            parsed_rows = []
+            for r in raw_rows:
+                vals = []
+                for cell in r:
+                    c_type = cell.get("type")
+                    val = cell.get("value")
+                    if c_type == "integer" and val is not None:
+                        vals.append(int(val))
+                    elif c_type == "float" and val is not None:
+                        vals.append(float(val))
+                    elif c_type == "null":
+                        vals.append(None)
+                    else:
+                        vals.append(val)
+                parsed_rows.append(TursoRow(cols, vals))
+                
+            self._rows = parsed_rows
+            self._row_idx = 0
+            return self
+
+    def fetchone(self) -> Optional[TursoRow]:
+        if self._row_idx < len(self._rows):
+            row = self._rows[self._row_idx]
+            self._row_idx += 1
+            return row
+        return None
+
+    def fetchall(self) -> List[TursoRow]:
+        remaining = self._rows[self._row_idx:]
+        self._row_idx = len(self._rows)
+        return remaining
+
+class TursoConnection:
+    def __init__(self, db_url: str, auth_token: str):
+        # Format https://<host>/v2/pipeline
+        clean_url = db_url.replace("libsql://", "https://").replace("http://", "https://")
+        if not clean_url.endswith("/v2/pipeline"):
+            clean_url = clean_url.rstrip("/") + "/v2/pipeline"
+        self.pipeline_url = clean_url
+        self.auth_token = auth_token
+
+    def cursor(self) -> TursoCursor:
+        return TursoCursor(self)
+
+    def execute(self, sql: str, params: tuple = ()):
+        cur = self.cursor()
+        return cur.execute(sql, params)
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        pass
+
+# ---------------------------------------------------------------------------
+# Database Connection Manager
+# ---------------------------------------------------------------------------
+def is_turso_configured() -> bool:
+    return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+
+def get_db_connection():
+    if is_turso_configured():
+        return TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+    else:
+        conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
+        return conn
 
 @contextmanager
-def get_db() -> Generator[sqlite3.Connection, None, None]:
+def get_db() -> Generator[Any, None, None]:
     conn = get_db_connection()
     try:
         yield conn
@@ -81,7 +224,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS timetable_blocks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             section_id INTEGER NOT NULL,
-            weekday INTEGER NOT NULL, -- 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+            weekday INTEGER NOT NULL,
             order_index INTEGER NOT NULL,
             subject TEXT NOT NULL,
             periods INTEGER NOT NULL,
@@ -95,7 +238,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS daily_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            log_date TEXT NOT NULL, -- YYYY-MM-DD
+            log_date TEXT NOT NULL,
             block_id INTEGER NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('present', 'absent', 'holiday')),
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -112,13 +255,12 @@ def backup_db() -> str:
     backup_filename = f"attendance_backup_{timestamp}.db"
     backup_path = os.path.join(BACKUP_DIR, backup_filename)
     
-    # Use SQLite's online backup API for consistency
-    src_conn = get_db_connection()
-    dst_conn = sqlite3.connect(backup_path)
-    try:
-        src_conn.backup(dst_conn)
-    finally:
-        dst_conn.close()
-        src_conn.close()
-        
+    if not is_turso_configured():
+        src_conn = get_db_connection()
+        dst_conn = sqlite3.connect(backup_path)
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+            src_conn.close()
     return backup_path
