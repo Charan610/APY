@@ -16,10 +16,12 @@ class MarkAttendanceRequest(BaseModel):
     log_date: str = Field(..., pattern="^\\d{4}-\\d{2}-\\d{2}$") # YYYY-MM-DD
     entries: List[MarkAttendanceItem]
 
-def validate_edit_window(log_date_str: str):
+def validate_edit_window(log_date_str: str, baseline_date_str: Optional[str] = None):
     """
     Enforces server-side edit window:
-    today - 7 days <= log_date <= today
+    1. today - 7 days <= log_date <= today
+    2. If baseline_date is set, log_date MUST be strictly > baseline_date
+       (Dates on or before baseline_date are covered in historical baseline totals and locked).
     """
     try:
         log_date = datetime.strptime(log_date_str, "%Y-%m-%d").date()
@@ -34,6 +36,18 @@ def validate_edit_window(log_date_str: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Edit window violation: log_date {log_date_str} must be between {min_date.isoformat()} and {today.isoformat()} (within the last 7 days)."
         )
+        
+    if baseline_date_str:
+        try:
+            b_date = datetime.strptime(baseline_date_str, "%Y-%m-%d").date()
+            if log_date <= b_date:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Locked date: {log_date_str} is on or before baseline cutoff date ({baseline_date_str}) and is already included in baseline figures."
+                )
+        except ValueError:
+            pass
+            
     return log_date
 
 def calculate_bunk_stats(attended: int, total: int) -> dict:
@@ -116,8 +130,8 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
     user_id = current_user["id"]
     section_id = current_user["section_id"]
     
-    # 1. Enforce strict 7-day rule server-side
-    validate_edit_window(req.log_date)
+    # 1. Enforce strict 7-day rule & baseline cutoff date server-side
+    validate_edit_window(req.log_date, current_user.get("baseline_date"))
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -157,16 +171,27 @@ def get_attendance_summary(current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Query all logged attendance for this user
-        cursor.execute(
-            """
-            SELECT b.subject, b.periods, l.status, l.log_date
-            FROM daily_logs l
-            JOIN timetable_blocks b ON l.block_id = b.id
-            WHERE l.user_id = ?
-            """,
-            (user_id,)
-        )
+        # Query logged attendance strictly after baseline_date
+        if baseline_date:
+            cursor.execute(
+                """
+                SELECT b.subject, b.periods, l.status, l.log_date
+                FROM daily_logs l
+                JOIN timetable_blocks b ON l.block_id = b.id
+                WHERE l.user_id = ? AND l.log_date > ?
+                """,
+                (user_id, baseline_date)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT b.subject, b.periods, l.status, l.log_date
+                FROM daily_logs l
+                JOIN timetable_blocks b ON l.block_id = b.id
+                WHERE l.user_id = ?
+                """,
+                (user_id,)
+            )
         logs = cursor.fetchall()
         
         # Query distinct subjects from timetable

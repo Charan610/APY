@@ -16,7 +16,8 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
   minDateObj.setDate(todayObj.getDate() - 7);
   const minDateStr = minDateObj.toISOString().split('T')[0];
 
-  const isDateEditable = currentDate >= minDateStr && currentDate <= todayStr;
+  const isCoveredByBaseline = Boolean(user?.baseline_date && currentDate <= user.baseline_date);
+  const isDateEditable = currentDate >= minDateStr && currentDate <= todayStr && !isCoveredByBaseline;
 
   useEffect(() => {
     if (user?.section_id) {
@@ -53,12 +54,14 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
       d.setDate(todayObj.getDate() - i);
       const iso = d.toISOString().split('T')[0];
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const isPastBaseline = Boolean(user?.baseline_date && iso <= user.baseline_date);
       days.push({
         dateStr: iso,
         dayName: dayNames[d.getDay()],
         dayNum: d.getDate(),
         isToday: iso === todayStr,
         isSunday: d.getDay() === 0,
+        isPastBaseline,
         hasLogs: Boolean(dailyLogs[iso]?.length)
       });
     }
@@ -142,7 +145,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
           >
             <div className="ribbon-day-label">{d.dayName}</div>
             <div className="ribbon-day-num">{d.dayNum}</div>
-            <div className={`ribbon-status-dot ${d.isSunday ? 'holiday' : d.hasLogs ? 'logged' : ''}`} />
+            <div className={`ribbon-status-dot ${d.isSunday ? 'holiday' : d.isPastBaseline ? 'baseline' : d.hasLogs ? 'logged' : ''}`} />
           </div>
         ))}
       </div>
@@ -156,7 +159,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
               {currentDate === todayStr && <span className="card-header-badge good">Today</span>}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-              Section {user?.section_label} · {feedback || (saving ? 'Saving...' : '7-Day Edit Window')}
+              Section {user?.section_label} · {feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Included in Baseline Cutoff' : '7-Day Edit Window')}
             </div>
           </div>
 
@@ -176,13 +179,20 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
           </div>
         </div>
 
-        {/* Edit window check */}
-        {!isDateEditable && (
+        {/* Baseline / Edit window check */}
+        {isCoveredByBaseline ? (
+          <div className="alert-callout error" style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', color: 'var(--ink)' }}>
+            <Lock size={16} color="var(--accent-gold)" />
+            <span>
+              <strong>Included in Historical Baseline:</strong> Periods up to & including <strong>{user.baseline_date}</strong> are already counted in your baseline figures ({user.baseline_attended}/{user.baseline_total}). Daily logging starts after this date.
+            </span>
+          </div>
+        ) : !isDateEditable ? (
           <div className="alert-callout error">
             <Lock size={16} />
-            <span>This date is outside the 7-day window. Editing is locked.</span>
+            <span>This date is outside the active 7-day window. Editing is locked.</span>
           </div>
-        )}
+        ) : null}
 
         {/* Action helper buttons */}
         {isDateEditable && !isSunday && currentBlocks.length > 0 && (

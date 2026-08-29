@@ -453,6 +453,7 @@ h1, h2, h3, h4, .heading-ledger {
 
 .ribbon-status-dot.logged { background: var(--good); }
 .ribbon-status-dot.holiday { background: var(--accent-gold); }
+.ribbon-status-dot.baseline { background: var(--rule); opacity: 0.6; }
 
 /* Period Marking Rows (Today View) */
 .period-ledger-block {
