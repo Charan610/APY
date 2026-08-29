@@ -76,6 +76,8 @@ export default function App() {
         <>
           <Header
             user={user}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
             onOpenSettings={() => setShowSettings(true)}
             onLogout={handleLogout}
           />

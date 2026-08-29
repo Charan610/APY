@@ -94,7 +94,7 @@ export default function ForecastTab({ user }) {
             No scheduled periods found for this date.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div className="forecast-pc-grid">
             {forecastData?.blocks?.map((block) => (
               <div
                 key={block.block_id}

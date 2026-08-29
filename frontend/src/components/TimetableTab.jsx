@@ -93,7 +93,7 @@ export default function TimetableTab({ user, onTimetableUpdated }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        <div className="timetable-pc-grid">
           {DAYS.map((d) => {
             const blocks = timetableData?.timetable_by_day?.[d.weekday] || [];
             return (

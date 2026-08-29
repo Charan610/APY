@@ -1,7 +1,7 @@
 import React from 'react';
-import { Settings, LogOut } from 'lucide-react';
+import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react';
 
-export default function Header({ user, onOpenSettings, onLogout }) {
+export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onLogout }) {
   return (
     <header className="ledger-header">
       <div className="brand-section">
@@ -12,6 +12,45 @@ export default function Header({ user, onOpenSettings, onLogout }) {
             {user ? `${user.branch || 'CSE'} — Sec ${user.section_label || 'C'} · ${user.register_number}` : 'CSE Department'}
           </div>
         </div>
+      </div>
+
+      {/* Desktop Navigation Links (Visible on PC / Tablet) */}
+      <div className="desktop-nav-links">
+        <button
+          type="button"
+          className={`desktop-tab-btn ${activeTab === 'today' ? 'active' : ''}`}
+          onClick={() => onSelectTab('today')}
+        >
+          <CalendarCheck size={16} />
+          <span>Today</span>
+        </button>
+
+        <button
+          type="button"
+          className={`desktop-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => onSelectTab('dashboard')}
+        >
+          <LayoutDashboard size={16} />
+          <span>Dashboard</span>
+        </button>
+
+        <button
+          type="button"
+          className={`desktop-tab-btn ${activeTab === 'timetable' ? 'active' : ''}`}
+          onClick={() => onSelectTab('timetable')}
+        >
+          <Calendar size={16} />
+          <span>Timetable</span>
+        </button>
+
+        <button
+          type="button"
+          className={`desktop-tab-btn ${activeTab === 'forecast' ? 'active' : ''}`}
+          onClick={() => onSelectTab('forecast')}
+        >
+          <Sparkles size={16} />
+          <span>Forecast</span>
+        </button>
       </div>
 
       <div className="header-actions">

@@ -60,17 +60,18 @@ h1, h2, h3, h4, .heading-ledger {
   letter-spacing: -0.01em;
 }
 
-/* Mobile-First Centered Container (~520px) */
+/* Mobile-First Centered Container (Adapts seamlessly from 520px mobile to 880px PC) */
 .app-viewport {
+  width: 100%;
   max-width: 520px;
   margin: 0 auto;
   min-height: 100vh;
   padding: 1rem 1rem 5.5rem 1rem;
   position: relative;
-  /* Ruled left margin motif from ledger */
   border-left: 2px solid rgba(223, 214, 190, 0.6);
   border-right: 1px solid rgba(223, 214, 190, 0.35);
   background-color: var(--bg);
+  transition: max-width 0.2s ease, padding 0.2s ease;
 }
 
 /* Top App Header */
@@ -90,8 +91,8 @@ h1, h2, h3, h4, .heading-ledger {
 }
 
 .brand-crest {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: var(--radius-sm);
   background: var(--ink);
   color: var(--accent-gold);
@@ -100,11 +101,11 @@ h1, h2, h3, h4, .heading-ledger {
   justify-content: center;
   font-family: var(--font-serif);
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 
 .brand-heading {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 700;
   line-height: 1.2;
   color: var(--ink);
@@ -122,7 +123,49 @@ h1, h2, h3, h4, .heading-ledger {
   gap: 0.4rem;
 }
 
-/* Persistent Bottom Tab Bar (4 destinations: Today · Dashboard · Timetable · Forecast) */
+/* Desktop Header Navigation Tabs (Hidden on mobile, visible on PC) */
+.desktop-nav-links {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--rule);
+  padding: 3px;
+  border-radius: var(--radius-md);
+}
+
+.desktop-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.825rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.desktop-tab-btn:hover {
+  color: var(--ink);
+  background: rgba(36, 27, 78, 0.05);
+}
+
+.desktop-tab-btn.active {
+  background: var(--ink);
+  color: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(36, 27, 78, 0.15);
+}
+
+.desktop-tab-btn.active svg {
+  color: var(--accent-gold);
+}
+
+/* Persistent Bottom Tab Bar (For Mobile screens) */
 .bottom-tab-bar {
   position: fixed;
   bottom: 0;
@@ -135,6 +178,7 @@ h1, h2, h3, h4, .heading-ledger {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   padding: 0.45rem 0.25rem;
+  padding-bottom: calc(0.45rem + env(safe-area-inset-bottom, 0px));
   z-index: 900;
   box-shadow: 0 -4px 16px rgba(36, 27, 78, 0.06);
 }
@@ -641,4 +685,48 @@ h1, h2, h3, h4, .heading-ledger {
   background: var(--good-soft);
   color: var(--good);
   border: 1px solid rgba(62, 139, 111, 0.3);
+}
+
+/* =========================================================
+   PC / DESKTOP & TABLET ENHANCEMENTS (screens >= 768px)
+   ========================================================= */
+@media (min-width: 768px) {
+  .app-viewport {
+    max-width: 860px;
+    padding: 1.75rem 2rem 3rem 2rem;
+    border-left: 2px solid var(--rule);
+    border-right: 2px solid var(--rule);
+    box-shadow: 0 4px 24px rgba(36, 27, 78, 0.06);
+  }
+
+  /* Show desktop navigation tabs in header */
+  .desktop-nav-links {
+    display: flex;
+  }
+
+  /* Hide mobile bottom tab bar on PC */
+  .bottom-tab-bar {
+    display: none;
+  }
+
+  /* 2-column grid for Subject Cards on PC */
+  .subject-pc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+  }
+
+  /* 3-column grid for Timetable days on PC */
+  .timetable-pc-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.85rem;
+  }
+
+  /* 2-column grid for Forecast blocks on PC */
+  .forecast-pc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+  }
 }
