@@ -10,10 +10,10 @@ import SettingsModal from './components/SettingsModal';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react';
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => getStoredUser());
   const [summary, setSummary] = useState(null);
-  const [activeTab, setActiveTab] = useState('today'); // 'today' | 'dashboard' | 'timetable' | 'forecast'
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('today');
+  const [loading, setLoading] = useState(() => !getStoredUser());
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -22,14 +22,27 @@ export default function App() {
 
   const initSession = async () => {
     try {
-      const data = await api.getMe();
-      setUser(data.user);
-      setStoredUser(data.user);
-      loadSummary();
+      // Parallelize profile verification & summary fetching
+      const [userData, summaryData] = await Promise.all([
+        api.getMe().catch(() => null),
+        api.getSummary().catch(() => null)
+      ]);
+
+      if (userData && userData.user) {
+        setUser(userData.user);
+        setStoredUser(userData.user);
+        if (summaryData) setSummary(summaryData);
+      } else if (!getStoredUser()) {
+        setUser(null);
+        setAuthToken(null);
+        setStoredUser(null);
+      }
     } catch (err) {
-      setUser(null);
-      setAuthToken(null);
-      setStoredUser(null);
+      if (!getStoredUser()) {
+        setUser(null);
+        setAuthToken(null);
+        setStoredUser(null);
+      }
     } finally {
       setLoading(false);
     }

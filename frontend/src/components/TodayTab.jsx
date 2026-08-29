@@ -21,29 +21,32 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
 
   useEffect(() => {
     if (user?.section_id) {
-      loadTimetable();
-      loadLogs();
+      loadInitialData();
     }
   }, [user?.section_id]);
 
-  const loadTimetable = async () => {
+  const loadInitialData = async () => {
+    setLoading(true);
     try {
-      const data = await api.getSectionTimetable(user.section_id);
-      setTimetableByDay(data.timetable_by_day || {});
+      const [ttData, logsData] = await Promise.all([
+        api.getSectionTimetable(user.section_id).catch(() => ({})),
+        api.getLogs().catch(() => ({}))
+      ]);
+      setTimetableByDay(ttData.timetable_by_day || {});
+      setDailyLogs(logsData.logs_by_date || {});
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const loadLogs = async () => {
-    setLoading(true);
     try {
       const data = await api.getLogs();
       setDailyLogs(data.logs_by_date || {});
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 

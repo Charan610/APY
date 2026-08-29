@@ -146,6 +146,12 @@ def seed_database():
     with get_db() as conn:
         cursor = conn.cursor()
         
+        # Fast exit if already seeded
+        cursor.execute("SELECT COUNT(*) as count FROM sections WHERE branch = 'CSE'")
+        res = cursor.fetchone()
+        if res and res["count"] >= 5:
+            return
+
         for sec in SECTIONS_DATA:
             cursor.execute(
                 "SELECT id FROM sections WHERE branch = ? AND section_label = ?",
