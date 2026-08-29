@@ -125,8 +125,16 @@ def register(req: RegisterRequest):
             """,
             (req.register_number, pin_hash, section_id, req.baseline_attended or 0, req.baseline_total or 0, req.baseline_date)
         )
-        user_id = cursor.lastrowid
-        
+        cursor.execute(
+            """
+            SELECT s.branch, s.section_label 
+            FROM sections s 
+            WHERE s.id = ?
+            """,
+            (section_id,)
+        )
+        sec_info = cursor.fetchone()
+
         token = create_access_token({"sub": user_id, "reg": req.register_number})
         
         return {
@@ -135,6 +143,8 @@ def register(req: RegisterRequest):
                 "id": user_id,
                 "register_number": req.register_number,
                 "section_id": section_id,
+                "branch": sec_info["branch"] if sec_info else "CSE",
+                "section_label": sec_info["section_label"] if sec_info else "",
                 "baseline_attended": req.baseline_attended or 0,
                 "baseline_total": req.baseline_total or 0,
                 "baseline_date": req.baseline_date
