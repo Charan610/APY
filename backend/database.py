@@ -1,8 +1,9 @@
 import sqlite3
 import os
 import shutil
-import httpx
-import traceback
+import json
+import urllib.request
+import urllib.error
 from datetime import datetime
 from typing import Generator, Any, List, Optional
 from contextlib import contextmanager
@@ -32,7 +33,7 @@ else:
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Turso Cloud SQLite HTTP Pipeline Adapter
+# Turso Cloud SQLite Standard-Library HTTP Driver (Zero External Dependencies)
 # ---------------------------------------------------------------------------
 class TursoRow(dict):
     def __init__(self, cols: List[str], values: List[Any]):
@@ -82,51 +83,62 @@ class TursoCursor:
             ]
         }
 
-        with httpx.Client(timeout=10.0) as http_client:
-            res = http_client.post(endpoint, json=payload, headers=headers)
-            if res.status_code != 200:
-                raise RuntimeError(f"Turso HTTP Error {res.status_code}: {res.text}")
-            
-            data = res.json()
-            results = data.get("results", [])
-            if not results:
-                return self
-            
-            first_res = results[0]
-            if first_res.get("type") == "error":
-                err_msg = first_res.get("error", {}).get("message", "Unknown SQL Error")
-                raise RuntimeError(f"Turso SQL Error: {err_msg}")
-            
-            resp_data = first_res.get("response", {}).get("result", {})
-            lid = resp_data.get("last_insert_rowid")
-            if lid is not None:
-                try:
-                    self.lastrowid = int(lid)
-                except (ValueError, TypeError):
-                    self.lastrowid = None
-            
-            cols = [c.get("name") for c in resp_data.get("cols", [])]
-            raw_rows = resp_data.get("rows", [])
-            
-            parsed_rows = []
-            for r in raw_rows:
-                vals = []
-                for cell in r:
-                    c_type = cell.get("type")
-                    val = cell.get("value")
-                    if c_type == "integer" and val is not None:
-                        vals.append(int(val))
-                    elif c_type == "float" and val is not None:
-                        vals.append(float(val))
-                    elif c_type == "null":
-                        vals.append(None)
-                    else:
-                        vals.append(val)
-                parsed_rows.append(TursoRow(cols, vals))
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=10.0) as response:
+                raw_body = response.read().decode("utf-8")
+                data = json.loads(raw_body)
+                results = data.get("results", [])
+                if not results:
+                    return self
                 
-            self._rows = parsed_rows
-            self._row_idx = 0
-            return self
+                first_res = results[0]
+                if first_res.get("type") == "error":
+                    err_msg = first_res.get("error", {}).get("message", "Unknown SQL Error")
+                    raise RuntimeError(f"Turso SQL Error: {err_msg}")
+                
+                resp_data = first_res.get("response", {}).get("result", {})
+                lid = resp_data.get("last_insert_rowid")
+                if lid is not None:
+                    try:
+                        self.lastrowid = int(lid)
+                    except (ValueError, TypeError):
+                        self.lastrowid = None
+                
+                cols = [c.get("name") for c in resp_data.get("cols", [])]
+                raw_rows = resp_data.get("rows", [])
+                
+                parsed_rows = []
+                for r in raw_rows:
+                    vals = []
+                    for cell in r:
+                        c_type = cell.get("type")
+                        val = cell.get("value")
+                        if c_type == "integer" and val is not None:
+                            vals.append(int(val))
+                        elif c_type == "float" and val is not None:
+                            vals.append(float(val))
+                        elif c_type == "null":
+                            vals.append(None)
+                        else:
+                            vals.append(val)
+                    parsed_rows.append(TursoRow(cols, vals))
+                    
+                self._rows = parsed_rows
+                self._row_idx = 0
+                return self
+        except urllib.error.HTTPError as he:
+            err_text = he.read().decode('utf-8', errors='ignore')
+            raise RuntimeError(f"Turso HTTP Error {he.code}: {err_text}")
+        except Exception as e:
+            print(f"Error executing Turso SQL [{sql}]: {e}")
+            raise
 
     def fetchone(self) -> Optional[TursoRow]:
         if self._row_idx < len(self._rows):

@@ -1,27 +1,32 @@
 import time
-import bcrypt
+import os
+import hashlib
+import secrets
 import jwt
 from typing import Optional, Dict
 from fastapi import HTTPException, Security, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from database import get_db
 
+try:
+    import bcrypt
+    HAS_BCRYPT = True
+except Exception:
+    HAS_BCRYPT = False
+
 SECRET_KEY = "cse-attendance-ledger-jwt-secret-key-2026"
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 30  # 30 days
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
-# In-memory rate limiter for login attempts per register_number
-# Tracks {register_number: [timestamp1, timestamp2, ...]}
 LOGIN_ATTEMPTS: Dict[str, list] = {}
-MAX_ATTEMPTS = 5
+MAX_ATTEMPTS = 10
 ATTEMPT_WINDOW_SECONDS = 300  # 5 minutes
 
 def check_rate_limit(register_number: str):
     now = time.time()
     attempts = LOGIN_ATTEMPTS.get(register_number, [])
-    # Filter attempts within window
     recent_attempts = [t for t in attempts if now - t < ATTEMPT_WINDOW_SECONDS]
     LOGIN_ATTEMPTS[register_number] = recent_attempts
     
@@ -43,11 +48,33 @@ def clear_rate_limit(register_number: str):
         del LOGIN_ATTEMPTS[register_number]
 
 def hash_pin(pin: str) -> str:
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(pin.encode('utf-8'), salt).decode('utf-8')
+    if HAS_BCRYPT:
+        try:
+            salt = bcrypt.gensalt()
+            return bcrypt.hashpw(pin.encode('utf-8'), salt).decode('utf-8')
+        except Exception:
+            pass
+    # Pure Python PBKDF2 Fallback (Zero Binary Dependencies)
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac('sha256', pin.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return f"pbkdf2:{salt}:{key.hex()}"
 
 def verify_pin(plain_pin: str, hashed_pin: str) -> bool:
-    return bcrypt.checkpw(plain_pin.encode('utf-8'), hashed_pin.encode('utf-8'))
+    if not hashed_pin:
+        return False
+    if hashed_pin.startswith("pbkdf2:"):
+        try:
+            _, salt, key_hex = hashed_pin.split(":")
+            key = hashlib.pbkdf2_hmac('sha256', plain_pin.encode('utf-8'), salt.encode('utf-8'), 100000)
+            return secrets.compare_digest(key.hex(), key_hex)
+        except Exception:
+            return False
+    elif HAS_BCRYPT:
+        try:
+            return bcrypt.checkpw(plain_pin.encode('utf-8'), hashed_pin.encode('utf-8'))
+        except Exception:
+            return False
+    return False
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
@@ -57,18 +84,23 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
+def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)) -> dict:
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please sign in."
+        )
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         sub_val = payload.get("sub")
-        if sub_val is None:
+        if sub_val is None or str(sub_val) == "None":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token claims"
             )
         user_id = int(sub_val)
-    except jwt.PyJWTError as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
