@@ -5,11 +5,11 @@ import { User, Lock, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function AuthModal({ onAuthSuccess }) {
   const DEFAULT_SECTIONS = [
-    { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 26 },
-    { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 26 },
-    { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 26 },
-    { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 26 },
-    { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 26 }
+    { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 34 },
+    { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 34 },
+    { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 34 },
+    { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 34 },
+    { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
   ];
 
   const [mode, setMode] = useState('login');
