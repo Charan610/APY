@@ -4,8 +4,22 @@ import { Check, X, Coffee, ChevronLeft, ChevronRight, CheckCheck, Lock, UserX } 
 
 export default function TodayTab({ user, onAttendanceUpdated }) {
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [timetableByDay, setTimetableByDay] = useState({});
-  const [dailyLogs, setDailyLogs] = useState({});
+  const [timetableByDay, setTimetableByDay] = useState(() => {
+    try {
+      const cached = localStorage.getItem(`apy_tt_cache_${user?.section_id || 1}`);
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [dailyLogs, setDailyLogs] = useState(() => {
+    try {
+      const cached = localStorage.getItem('apy_logs_cache');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -30,25 +44,31 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
   }, [user?.section_id]);
 
   const loadInitialData = async () => {
-    setLoading(true);
     try {
       const [ttData, logsData] = await Promise.all([
         api.getSectionTimetable(user.section_id).catch(() => ({})),
         api.getLogs().catch(() => ({}))
       ]);
-      setTimetableByDay(ttData.timetable_by_day || {});
-      setDailyLogs(logsData.logs_by_date || {});
+      if (ttData?.timetable_by_day) {
+        setTimetableByDay(ttData.timetable_by_day);
+        try { localStorage.setItem(`apy_tt_cache_${user.section_id}`, JSON.stringify(ttData.timetable_by_day)); } catch {}
+      }
+      if (logsData?.logs_by_date) {
+        setDailyLogs(logsData.logs_by_date);
+        try { localStorage.setItem('apy_logs_cache', JSON.stringify(logsData.logs_by_date)); } catch {}
+      }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadLogs = async () => {
     try {
       const data = await api.getLogs();
-      setDailyLogs(data.logs_by_date || {});
+      if (data?.logs_by_date) {
+        setDailyLogs(data.logs_by_date);
+        try { localStorage.setItem('apy_logs_cache', JSON.stringify(data.logs_by_date)); } catch {}
+      }
     } catch (err) {
       console.error(err);
     }

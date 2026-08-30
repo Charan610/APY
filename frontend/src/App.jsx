@@ -11,7 +11,14 @@ import { CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
-  const [summary, setSummary] = useState(null);
+  const [summary, setSummary] = useState(() => {
+    try {
+      const cached = localStorage.getItem('apy_summary_cache');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [activeTab, setActiveTab] = useState('today');
   const [loading, setLoading] = useState(() => !getStoredUser());
   const [showSettings, setShowSettings] = useState(false);
@@ -22,7 +29,7 @@ export default function App() {
 
   const initSession = async () => {
     try {
-      // Parallelize profile verification & summary fetching
+      // Parallelize profile verification & summary fetching in background
       const [userData, summaryData] = await Promise.all([
         api.getMe().catch(() => null),
         api.getSummary().catch(() => null)
@@ -31,11 +38,17 @@ export default function App() {
       if (userData && userData.user) {
         setUser(userData.user);
         setStoredUser(userData.user);
-        if (summaryData) setSummary(summaryData);
+        if (summaryData) {
+          setSummary(summaryData);
+          try {
+            localStorage.setItem('apy_summary_cache', JSON.stringify(summaryData));
+          } catch {}
+        }
       } else if (!getStoredUser()) {
         setUser(null);
         setAuthToken(null);
         setStoredUser(null);
+        try { localStorage.removeItem('apy_summary_cache'); } catch {}
       }
     } catch (err) {
       if (!getStoredUser()) {
@@ -52,6 +65,9 @@ export default function App() {
     try {
       const data = await api.getSummary();
       setSummary(data);
+      try {
+        localStorage.setItem('apy_summary_cache', JSON.stringify(data));
+      } catch {}
     } catch (err) {
       console.error(err);
     }

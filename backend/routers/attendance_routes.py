@@ -171,6 +171,7 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
 @router.get("/summary")
 def get_attendance_summary(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
+    section_id = current_user.get("section_id") or 1
     baseline_attended = current_user.get("baseline_attended") or 0
     baseline_total = current_user.get("baseline_total") or 0
     baseline_date = current_user.get("baseline_date")
@@ -178,50 +179,31 @@ def get_attendance_summary(current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Query logged attendance strictly after baseline_date
-        if baseline_date:
-            cursor.execute(
-                """
-                SELECT b.subject, b.periods, l.status, l.log_date
-                FROM daily_logs l
-                JOIN timetable_blocks b ON l.block_id = b.id
-                WHERE l.user_id = ? AND l.log_date > ?
-                """,
-                (user_id, baseline_date)
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT b.subject, b.periods, l.status, l.log_date
-                FROM daily_logs l
-                JOIN timetable_blocks b ON l.block_id = b.id
-                WHERE l.user_id = ?
-                """,
-                (user_id,)
-            )
-        logs = cursor.fetchall()
-        
-        # Query distinct subjects from timetable
+        # Single ultra-fast combined query for subjects and logs
         cursor.execute(
             """
-            SELECT DISTINCT subject
-            FROM timetable_blocks
-            WHERE section_id = ?
-            ORDER BY subject
+            SELECT 
+                b.subject, 
+                b.periods, 
+                l.status,
+                l.log_date
+            FROM timetable_blocks b
+            LEFT JOIN daily_logs l 
+                   ON b.id = l.block_id 
+                  AND l.user_id = ? 
+                  AND (l.log_date > ? OR ? IS NULL)
+            WHERE b.section_id = ?
+            ORDER BY b.subject
             """,
-            (current_user["section_id"],)
+            (user_id, baseline_date, baseline_date, section_id)
         )
-        all_subjects = [row["subject"] for row in cursor.fetchall()]
+        rows = cursor.fetchall()
         
-        # Aggregate subject-wise
-        subject_stats: Dict[str, dict] = {
-            s: {"attended": 0, "total": 0, "holiday_periods": 0} for s in all_subjects
-        }
-        
+        subject_stats: Dict[str, dict] = {}
         logged_attended = 0
         logged_total = 0
         
-        for row in logs:
+        for row in rows:
             subj = row["subject"]
             periods = row["periods"]
             status = row["status"]
