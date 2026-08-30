@@ -11,35 +11,28 @@ from routers.notification_routes import router as notification_router
 from notifications import dispatch_scheduled_reminders
 from auth import get_current_user
 
-# Setup background scheduler for local/dedicated servers
+# Setup background scheduler for local/dedicated servers only
 scheduler = None
-try:
-    if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    try:
         from apscheduler.schedulers.background import BackgroundScheduler
         scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
         scheduler.add_job(dispatch_scheduled_reminders, "cron", minute="*", id="attendance_reminders", replace_existing=True)
-except Exception as e:
-    print("Scheduler init note:", e)
+        scheduler.start()
+    except Exception as e:
+        print("Scheduler init note:", e)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Initialize DB and seed default data
+# Ensure DB is initialized
+try:
     init_db()
     seed_database()
-    if scheduler:
-        try:
-            scheduler.start()
-        except Exception as e:
-            print("Scheduler start note:", e)
-    yield
-    if scheduler and scheduler.running:
-        scheduler.shutdown(wait=False)
+except Exception as e:
+    print("Database init note:", e)
 
 app = FastAPI(
     title="ATT PER Y API",
     description="Multi-user attendance tracking API with SQLite WAL mode, FAT forecaster, and 75% threshold calculator",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
 # Enable CORS for Vite frontend
