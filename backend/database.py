@@ -4,9 +4,14 @@ import shutil
 import json
 import urllib.request
 import urllib.error
+import logging
+import httpx
 from datetime import datetime
 from typing import Generator, Any, List, Optional
 from contextlib import contextmanager
+
+logger = logging.getLogger("database")
+logger.setLevel(logging.INFO)
 
 # Turso Cloud SQLite credentials
 TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL", "").strip().strip("'\"")
