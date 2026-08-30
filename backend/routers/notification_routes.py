@@ -103,14 +103,25 @@ def update_notification_preferences(
                 VALUES (?, ?)
             """, (user_id, 1 if req.enabled else 0))
 
-        # Clear existing times and insert fresh ones
+        # Clear existing times and insert fresh ones in a single batch
         cursor.execute("DELETE FROM notification_times WHERE user_id = ?", (user_id,))
         
-        for t in req.times:
-            cursor.execute("""
-                INSERT INTO notification_times (user_id, time_of_day, label, is_prebuilt)
-                VALUES (?, ?, ?, ?)
-            """, (user_id, t.time_of_day, t.label or "", 1 if t.is_prebuilt else 0))
+        if req.times:
+            time_params = [
+                (user_id, t.time_of_day, t.label or "", 1 if t.is_prebuilt else 0)
+                for t in req.times
+            ]
+            if hasattr(cursor, "executemany"):
+                cursor.executemany("""
+                    INSERT INTO notification_times (user_id, time_of_day, label, is_prebuilt)
+                    VALUES (?, ?, ?, ?)
+                """, time_params)
+            else:
+                for tp in time_params:
+                    cursor.execute("""
+                        INSERT INTO notification_times (user_id, time_of_day, label, is_prebuilt)
+                        VALUES (?, ?, ?, ?)
+                    """, tp)
 
     return {"status": "success", "message": "Notification preferences updated successfully"}
 

@@ -205,34 +205,51 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # Verify all block IDs belong to user's section
+        # 1. Verify all block IDs in a single batch query
+        cursor.execute("SELECT id FROM timetable_blocks WHERE section_id = ?", (section_id,))
+        valid_block_ids = {r["id"] for r in cursor.fetchall()}
+        
+        unmarked_entries = []
+        active_entries = []
+        
         for entry in req.entries:
-            cursor.execute(
-                "SELECT id, periods, subject FROM timetable_blocks WHERE id = ? AND section_id = ?",
-                (entry.block_id, section_id)
-            )
-            block = cursor.fetchone()
-            if not block:
+            if entry.block_id not in valid_block_ids:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Block ID {entry.block_id} does not belong to user's section."
                 )
-                
             if entry.status == "unmarked":
-                cursor.execute(
+                unmarked_entries.append((user_id, req.log_date, entry.block_id))
+            else:
+                active_entries.append((user_id, req.log_date, entry.block_id, entry.status))
+                
+        # 2. Batch delete unmarked entries
+        if unmarked_entries:
+            if hasattr(cursor, "executemany"):
+                cursor.executemany(
                     "DELETE FROM daily_logs WHERE user_id = ? AND log_date = ? AND block_id = ?",
-                    (user_id, req.log_date, entry.block_id)
+                    unmarked_entries
                 )
             else:
-                cursor.execute(
-                    """
-                    INSERT INTO daily_logs (user_id, log_date, block_id, status, updated_at)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(user_id, log_date, block_id) 
-                    DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP
-                    """,
-                    (user_id, req.log_date, entry.block_id, entry.status)
-                )
+                for u in unmarked_entries:
+                    cursor.execute(
+                        "DELETE FROM daily_logs WHERE user_id = ? AND log_date = ? AND block_id = ?",
+                        u
+                    )
+                    
+        # 3. Batch upsert active entries
+        if active_entries:
+            upsert_sql = """
+                INSERT INTO daily_logs (user_id, log_date, block_id, status, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, log_date, block_id) 
+                DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP
+            """
+            if hasattr(cursor, "executemany"):
+                cursor.executemany(upsert_sql, active_entries)
+            else:
+                for a in active_entries:
+                    cursor.execute(upsert_sql, a)
             
         # Return updated summary directly in response (eliminating 2nd HTTP roundtrip)
         fresh_summary = compute_summary_for_user(conn, current_user)
