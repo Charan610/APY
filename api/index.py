@@ -2,11 +2,11 @@ import os
 import sys
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(CURRENT_DIR)
-BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
+BACKEND_LOCAL = os.path.join(CURRENT_DIR, "backend")
+BACKEND_PARENT = os.path.join(os.path.dirname(CURRENT_DIR), "backend")
 
-for p in [BACKEND_DIR, CURRENT_DIR, ROOT_DIR]:
-    if p not in sys.path:
+for p in [BACKEND_LOCAL, BACKEND_PARENT, CURRENT_DIR]:
+    if os.path.exists(p) and p not in sys.path:
         sys.path.insert(0, p)
 
 from main import app
