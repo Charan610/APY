@@ -10,6 +10,3 @@ for p in [BACKEND_DIR, CURRENT_DIR, ROOT_DIR]:
         sys.path.insert(0, p)
 
 from main import app
-
-# Export FastAPI app for Vercel Serverless
-handler = app
