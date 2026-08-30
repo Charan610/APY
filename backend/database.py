@@ -242,9 +242,9 @@ class TursoConnection:
     def close(self):
         pass
 
-# ---------------------------------------------------------------------------
-# Database Connection Manager
-# ---------------------------------------------------------------------------
+def is_turso_configured() -> bool:
+    return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and len(TURSO_AUTH_TOKEN) > 20)
+
 _local_schema_initialized = False
 
 def get_db_connection():
