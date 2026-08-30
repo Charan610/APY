@@ -85,6 +85,35 @@ def trigger_backup(current_user: dict = Depends(get_current_user)):
         "message": "Database snapshot saved successfully."
     }
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Serve frontend build seamlessly on local backend port 8000
+dist_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+if not os.path.exists(dist_dir):
+    dist_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dist")
+
+if os.path.exists(dist_dir):
+    assets_dir = os.path.join(dist_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/sw.js")
+    def service_worker():
+        sw_file = os.path.join(dist_dir, "sw.js")
+        if os.path.exists(sw_file):
+            return FileResponse(sw_file, media_type="application/javascript")
+        return JSONResponse(status_code=404, content={"error": "sw not found"})
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        index_file = os.path.join(dist_dir, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"app": "ATT PER Y"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
