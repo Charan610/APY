@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cp -r backend api/backend 2>/dev/null || true && cd frontend && npm install && npm run build && cp -r dist ../dist"
+    "build": "rm -rf api/backend/venv api/backend/__pycache__ && cd frontend && npm install && npm run build && cp -r dist ../dist"
   }
 }
