@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import {
   requestNotificationPermissionAndSubscribe,
-  unsubscribeFromPush,
   isPushSupported,
   getNotificationPermission
 } from '../notifications';
@@ -19,9 +18,7 @@ import {
   Plus,
   Trash2,
   Send,
-  Sparkles,
-  AlertTriangle,
-  GraduationCap
+  AlertTriangle
 } from 'lucide-react';
 
 const GithubIcon = () => (
@@ -38,12 +35,20 @@ const InstagramIcon = () => (
   </svg>
 );
 
+const DEFAULT_SECTIONS = [
+  { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 34 },
+  { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 34 },
+  { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 34 },
+  { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 34 },
+  { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
+];
+
 export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, initialTab = 'profile' }) {
-  const [activeTab, setActiveTab] = useState(initialTab || 'profile'); // 'profile' | 'reminders' | 'about'
+  const [activeTab, setActiveTab] = useState(initialTab || 'profile');
 
   // Profile & Baseline state
-  const [sections, setSections] = useState([]);
-  const [selectedSectionId, setSelectedSectionId] = useState(user?.section_id || 1);
+  const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [selectedSectionId, setSelectedSectionId] = useState(user?.section_id || 3);
   const [attended, setAttended] = useState(user?.baseline_attended || 0);
   const [total, setTotal] = useState(user?.baseline_total || 0);
   const [bDate, setBDate] = useState(user?.baseline_date || '2026-08-24');
@@ -67,14 +72,29 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
   const [testNotifLoading, setTestNotifLoading] = useState(false);
   const [permissionState, setPermissionState] = useState('default');
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Load configuration on open
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab || 'profile');
+      setMsg('');
+      setError('');
       loadSections();
       loadNotificationConfig();
       setPermissionState(getNotificationPermission());
       if (user) {
-        setSelectedSectionId(user.section_id || 1);
+        setSelectedSectionId(user.section_id || 3);
         setAttended(user.baseline_attended || 0);
         setTotal(user.baseline_total || 0);
         setBDate(user.baseline_date || '2026-08-24');
@@ -89,7 +109,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
         setSections(data.sections);
       }
     } catch (e) {
-      console.error('Error loading sections:', e);
+      console.warn('Using default sections fallback');
     }
   };
 
@@ -111,7 +131,6 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
         }
       }
 
-      // If user had no saved active times yet, default prebuilts to true
       if (!config.has_preferences) {
         prebuilts['09:00'] = true;
         prebuilts['12:00'] = true;
@@ -121,7 +140,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       setSelectedPrebuilts(prebuilts);
       setCustomTimes(customs.sort());
     } catch (e) {
-      console.error('Error loading notification config:', e);
+      console.warn('Could not load notification config:', e);
     }
   };
 
@@ -136,7 +155,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       const tot = parseInt(total) || 0;
 
       if (tot < att) {
-        setError('Baseline total cannot be less than attended.');
+        setError('Baseline total periods cannot be less than attended.');
         setLoading(false);
         return;
       }
@@ -153,7 +172,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
         await api.updateSection(selectedSectionId);
       }
 
-      setMsg('Profile, Section, and Baseline updated successfully!');
+      setMsg('Profile, Section & Baseline updated successfully!');
       
       const freshUser = await api.getMe();
       if (freshUser?.user && onUserUpdated) {
@@ -163,35 +182,6 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       setError(err.message || 'Failed to update settings');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleToggleMasterNotifications = async (enable) => {
-    setError('');
-    setMsg('');
-    setNotifEnabled(enable);
-    setNotifLoading(true);
-
-    try {
-      if (enable) {
-        if (!isPushSupported()) {
-          throw new Error('Web Push notifications are not supported by your current browser.');
-        }
-
-        // Request browser permission & subscribe
-        const sub = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
-        await api.savePushSubscription(sub);
-        setPermissionState(getNotificationPermission());
-      }
-
-      await saveCurrentReminderPreferences(enable);
-      setMsg(enable ? 'Daily reminders enabled!' : 'Daily reminders paused.');
-    } catch (err) {
-      setNotifEnabled(!enable); // Revert on failure
-      setError(err.message || 'Failed to change notification settings');
-      setPermissionState(getNotificationPermission());
-    } finally {
-      setNotifLoading(false);
     }
   };
 
@@ -214,6 +204,34 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       enabled: enabledStatus,
       times: timesToSave
     });
+  };
+
+  const handleToggleMasterNotifications = async (enable) => {
+    setError('');
+    setMsg('');
+    setNotifEnabled(enable);
+    setNotifLoading(true);
+
+    try {
+      if (enable) {
+        if (!isPushSupported()) {
+          throw new Error('Web Push notifications are not supported by your current browser.');
+        }
+
+        const sub = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
+        await api.savePushSubscription(sub);
+        setPermissionState(getNotificationPermission());
+      }
+
+      await saveCurrentReminderPreferences(enable);
+      setMsg(enable ? 'Daily reminders enabled!' : 'Daily reminders paused.');
+    } catch (err) {
+      setNotifEnabled(!enable);
+      setError(err.message || 'Failed to change notification settings');
+      setPermissionState(getNotificationPermission());
+    } finally {
+      setNotifLoading(false);
+    }
   };
 
   const handleSaveReminders = async () => {
@@ -271,7 +289,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
     setBackupLoading(true);
     try {
       const res = await api.triggerBackup();
-      setMsg(`Backup snapshot created: ${res.backup_file}`);
+      setMsg(`Database snapshot saved: ${res.backup_file}`);
     } catch (err) {
       setError(err.message || 'Backup failed');
     } finally {
@@ -279,84 +297,164 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="modal-backdrop">
-      <div className="modal-dialog" style={{ maxWidth: '480px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--rule)', paddingBottom: '0.65rem' }}>
+    <div
+      className="modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="modal-dialog"
+        style={{
+          maxWidth: '520px',
+          width: '95%',
+          maxHeight: '88vh',
+          overflowY: 'auto',
+          boxSizing: 'border-box'
+        }}
+      >
+        {/* Header with Prominent Close Button */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1rem',
+          borderBottom: '1px solid var(--rule)',
+          paddingBottom: '0.65rem'
+        }}>
           <div>
-            <h3 className="heading-ledger" style={{ fontSize: '1.15rem' }}>Settings & Preferences</h3>
-            <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
-              {user?.register_number} · Section <strong>{user?.section_label} ({user?.branch})</strong>
+            <h3 className="heading-ledger" style={{ fontSize: '1.2rem', margin: 0 }}>
+              Settings & Preferences
+            </h3>
+            <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginTop: '0.15rem' }}>
+              {user?.register_number} · Section <strong>{user?.section_label || 'C'} ({user?.branch || 'CSE'})</strong>
             </div>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose}>
-            <X size={18} />
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onClose}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              padding: '0.35rem 0.65rem',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+            title="Close Settings (Esc)"
+          >
+            <X size={16} /> Close
           </button>
         </div>
 
         {/* Tab Selector Inside Settings */}
-        <div style={{ display: 'flex', background: 'var(--surface-alt)', padding: '3px', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', border: '1px solid var(--rule)' }}>
+        <div style={{
+          display: 'flex',
+          background: 'var(--surface-alt)',
+          padding: '4px',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '1.25rem',
+          border: '1px solid var(--rule)',
+          gap: '4px'
+        }}>
           <button
             type="button"
             className={`btn ${activeTab === 'profile' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.78rem' }}
+            style={{
+              flex: 1,
+              padding: '0.45rem',
+              fontSize: '0.8rem',
+              fontWeight: activeTab === 'profile' ? 700 : 500
+            }}
             onClick={() => { setActiveTab('profile'); setMsg(''); setError(''); }}
           >
+            <School size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
             Profile & Section
           </button>
           <button
             type="button"
             className={`btn ${activeTab === 'reminders' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+            style={{
+              flex: 1,
+              padding: '0.45rem',
+              fontSize: '0.8rem',
+              fontWeight: activeTab === 'reminders' ? 700 : 500
+            }}
             onClick={() => { setActiveTab('reminders'); setMsg(''); setError(''); }}
           >
-            <Bell size={13} /> Reminders
+            <Bell size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            Reminders
           </button>
           <button
             type="button"
             className={`btn ${activeTab === 'about' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ flex: 0.8, border: 'none', padding: '0.4rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+            style={{
+              flex: 0.8,
+              padding: '0.45rem',
+              fontSize: '0.8rem',
+              fontWeight: activeTab === 'about' ? 700 : 500
+            }}
             onClick={() => { setActiveTab('about'); setMsg(''); setError(''); }}
           >
-            <Info size={13} /> About
+            <Info size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            About
           </button>
         </div>
 
+        {/* Feedback Alerts */}
         {msg && (
-          <div className="alert-callout success">
+          <div className="alert-callout success" style={{ marginBottom: '1rem' }}>
             <CheckCircle2 size={16} />
             <span>{msg}</span>
           </div>
         )}
 
         {error && (
-          <div className="alert-callout error">
+          <div className="alert-callout error" style={{ marginBottom: '1rem' }}>
             <AlertCircle size={16} />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Tab 1: Profile & Baseline */}
+        {/* TAB 1: Profile & Section */}
         {activeTab === 'profile' && (
           <div>
             <form onSubmit={handleSaveProfile}>
-              {/* Section Change Picker */}
-              <div style={{ marginBottom: '1.25rem', background: 'var(--surface-alt)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--rule)' }}>
+              {/* Class Section Selector (High Visibility) */}
+              <div style={{
+                marginBottom: '1.25rem',
+                background: 'var(--surface-alt)',
+                padding: '1rem',
+                borderRadius: 'var(--radius-md)',
+                border: '1.5px solid var(--accent-gold)'
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                  <School size={16} color="var(--ink)" />
-                  <label className="form-label" style={{ marginBottom: 0, fontWeight: 700 }}>
+                  <School size={18} color="var(--ink)" />
+                  <label className="form-label" style={{ marginBottom: 0, fontWeight: 800, fontSize: '0.85rem', color: 'var(--ink)' }}>
                     Change Class Section
                   </label>
                 </div>
-                <p style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginBottom: '0.6rem' }}>
-                  If you picked the wrong section during registration, switch it here. Your daily timetable will immediately update.
+                <p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: '0.75rem' }}>
+                  Switch your section here. Your daily timetable will immediately update to match your selected section.
                 </p>
                 <select
                   className="form-control"
                   value={selectedSectionId}
                   onChange={(e) => setSelectedSectionId(parseInt(e.target.value))}
-                  style={{ fontWeight: 600 }}
+                  style={{
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    padding: '0.55rem',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--rule)'
+                  }}
                 >
                   {sections.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -367,7 +465,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
               </div>
 
               {/* Historical Baseline Figures */}
-              <div style={{ marginBottom: '1rem' }}>
+              <div style={{ marginBottom: '1rem', background: 'var(--surface)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--rule)' }}>
                 <h4 style={{ fontSize: '0.875rem', color: 'var(--ink)', fontWeight: 700, marginBottom: '0.2rem' }}>
                   Historical Baseline Cutoff
                 </h4>
@@ -377,7 +475,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.65rem' }}>
                   <div className="form-field">
-                    <label className="form-label">Attended</label>
+                    <label className="form-label">Attended Periods</label>
                     <input
                       type="number"
                       min="0"
@@ -388,7 +486,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                     />
                   </div>
                   <div className="form-field">
-                    <label className="form-label">Total Periods</label>
+                    <label className="form-label">Total Conducted</label>
                     <input
                       type="number"
                       min="0"
@@ -400,7 +498,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                   </div>
                 </div>
 
-                <div className="form-field">
+                <div className="form-field" style={{ marginBottom: 0 }}>
                   <label className="form-label">Baseline Cutoff Date</label>
                   <input
                     type="date"
@@ -408,31 +506,48 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                     value={bDate || ''}
                     onChange={(e) => setBDate(e.target.value)}
                   />
-                  <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
-                    All periods on/before this date are locked into baseline figures.
+                  <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', marginTop: '0.25rem' }}>
+                    All periods on or before this date are locked into baseline figures.
                   </div>
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                {loading ? 'Saving...' : 'Save Section & Baseline Changes'}
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '0.6rem', fontWeight: 700 }}
+                disabled={loading}
+              >
+                {loading ? 'Saving Changes...' : 'Save Section & Baseline Changes'}
               </button>
             </form>
 
-            {/* Durability Backup */}
-            <div style={{ borderTop: '1px solid var(--rule)', marginTop: '1.25rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Database Snapshot Backup */}
+            <div style={{
+              borderTop: '1px solid var(--rule)',
+              marginTop: '1.25rem',
+              paddingTop: '0.85rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
               <div>
                 <div style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--ink)' }}>Database Snapshot</div>
                 <div style={{ fontSize: '0.725rem', color: 'var(--ink-soft)' }}>SQLite WAL online backup</div>
               </div>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={handleTriggerBackup} disabled={backupLoading}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleTriggerBackup}
+                disabled={backupLoading}
+              >
                 <Database size={13} /> {backupLoading ? 'Backing up...' : 'Save Snapshot'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Tab 2: Reminders & Notifications */}
+        {/* TAB 2: Reminders */}
         {activeTab === 'reminders' && (
           <div>
             {/* Master Switch Card */}
@@ -464,7 +579,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                   checked={notifEnabled}
                   onChange={(e) => handleToggleMasterNotifications(e.target.checked)}
                   disabled={notifLoading}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  style={{ width: '20px', height: '20px', cursor: 'pointer' }}
                 />
               </label>
             </div>
@@ -473,7 +588,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
             {permissionState === 'denied' && (
               <div className="alert-callout error" style={{ marginBottom: '1rem', fontSize: '0.75rem' }}>
                 <AlertTriangle size={15} />
-                <span>Notifications are blocked in your browser settings. Please allow notifications for this site to receive alerts.</span>
+                <span>Notifications are blocked in browser settings. Please allow notifications for this site.</span>
               </div>
             )}
 
@@ -612,7 +727,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
               <button
                 type="button"
                 className="btn btn-primary"
-                style={{ flex: 1 }}
+                style={{ flex: 1, padding: '0.6rem', fontWeight: 700 }}
                 onClick={handleSaveReminders}
                 disabled={notifLoading}
               >
@@ -621,10 +736,16 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
             </div>
 
             {/* Send Test Notification Button */}
-            <div style={{ borderTop: '1px solid var(--rule)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{
+              borderTop: '1px solid var(--rule)',
+              paddingTop: '0.85rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
               <div>
                 <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink)' }}>Test Notification</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)' }}>Verify push alerts work on this device</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)' }}>Verify push alerts on this device</div>
               </div>
               <button
                 type="button"
@@ -638,14 +759,21 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
           </div>
         )}
 
-        {/* Tab 3: About */}
+        {/* TAB 3: About */}
         {activeTab === 'about' && (
           <div>
-            <div style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', borderRadius: 'var(--radius-md)', padding: '1rem', marginBottom: '1rem', textAlign: 'center' }}>
-              <h4 className="heading-ledger" style={{ fontSize: '1.05rem', color: 'var(--ink)' }}>
+            <div style={{
+              background: 'var(--surface-alt)',
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '1rem',
+              marginBottom: '1rem',
+              textAlign: 'center'
+            }}>
+              <h4 className="heading-ledger" style={{ fontSize: '1.05rem', color: 'var(--ink)', margin: 0 }}>
                 CSE Attendance Register
               </h4>
-              <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.2rem' }}>
                 Version <span style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>1.1.0</span> (Reminders Edition)
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', marginTop: '0.5rem', lineHeight: 1.4 }}>
@@ -654,7 +782,6 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-              {/* GitHub Repo Link */}
               <a
                 href="https://github.com/Charan610/APY"
                 target="_blank"
@@ -668,11 +795,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                   borderRadius: 'var(--radius-md)',
                   padding: '0.75rem 0.85rem',
                   textDecoration: 'none',
-                  color: 'var(--ink)',
-                  transition: 'background 0.15s ease'
+                  color: 'var(--ink)'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-alt)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <GithubIcon />
@@ -684,7 +808,6 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                 <ExternalLink size={15} color="var(--ink-soft)" />
               </a>
 
-              {/* Instagram ID Link */}
               <a
                 href="https://www.instagram.com/charan__3_/"
                 target="_blank"
@@ -698,11 +821,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                   borderRadius: 'var(--radius-md)',
                   padding: '0.75rem 0.85rem',
                   textDecoration: 'none',
-                  color: 'var(--ink)',
-                  transition: 'background 0.15s ease'
+                  color: 'var(--ink)'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-alt)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <InstagramIcon />
@@ -714,12 +834,20 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                 <ExternalLink size={15} color="var(--ink-soft)" />
               </a>
             </div>
-
-            <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.725rem', color: 'var(--ink-soft)' }}>
-              Built with FastAPI, SQLite WAL & React
-            </div>
           </div>
         )}
+
+        {/* Footer Done / Close Button */}
+        <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--rule)', paddingTop: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onClose}
+            style={{ width: '100%', padding: '0.5rem', fontWeight: 600 }}
+          >
+            Done / Close Modal
+          </button>
+        </div>
       </div>
     </div>
   );
