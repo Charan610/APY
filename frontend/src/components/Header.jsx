@@ -1,7 +1,7 @@
 import React from 'react';
-import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react';
+import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell } from 'lucide-react';
 
-export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onLogout }) {
+export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onOpenReminders, onLogout }) {
   return (
     <header className="ledger-header">
       <div className="brand-section">
@@ -54,6 +54,24 @@ export default function Header({ user, activeTab, onSelectTab, onOpenSettings, o
       </div>
 
       <div className="header-actions">
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={onOpenReminders}
+          title="Daily Attendance Reminders"
+          style={{ position: 'relative' }}
+        >
+          <Bell size={18} />
+          <span style={{
+            position: 'absolute',
+            top: '4px',
+            right: '4px',
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            background: 'var(--accent-gold)'
+          }} />
+        </button>
         <button type="button" className="btn-icon" onClick={onOpenSettings} title="Settings & Baseline">
           <Settings size={18} />
         </button>

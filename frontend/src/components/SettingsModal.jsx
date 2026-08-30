@@ -38,8 +38,8 @@ const InstagramIcon = () => (
   </svg>
 );
 
-export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) {
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'reminders' | 'about'
+export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, initialTab = 'profile' }) {
+  const [activeTab, setActiveTab] = useState(initialTab || 'profile'); // 'profile' | 'reminders' | 'about'
 
   // Profile & Baseline state
   const [sections, setSections] = useState([]);
@@ -69,6 +69,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
 
   useEffect(() => {
     if (isOpen) {
+      setActiveTab(initialTab || 'profile');
       loadSections();
       loadNotificationConfig();
       setPermissionState(getNotificationPermission());
@@ -79,7 +80,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
         setBDate(user.baseline_date || '2026-08-24');
       }
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, initialTab]);
 
   const loadSections = async () => {
     try {

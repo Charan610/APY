@@ -33,6 +33,7 @@ export default function App() {
   });
   const [loading, setLoading] = useState(() => !getStoredUser());
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('profile');
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
   useEffect(() => {
@@ -152,7 +153,14 @@ export default function App() {
             user={user}
             activeTab={activeTab}
             onSelectTab={setActiveTab}
-            onOpenSettings={() => setShowSettings(true)}
+            onOpenSettings={() => {
+              setSettingsTab('profile');
+              setShowSettings(true);
+            }}
+            onOpenReminders={() => {
+              setSettingsTab('reminders');
+              setShowSettings(true);
+            }}
             onLogout={handleLogout}
           />
 
@@ -240,6 +248,7 @@ export default function App() {
           {/* Settings Modal */}
           <SettingsModal
             isOpen={showSettings}
+            initialTab={settingsTab}
             onClose={() => setShowSettings(false)}
             user={user}
             onUserUpdated={() => {
