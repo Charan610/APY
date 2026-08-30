@@ -22,12 +22,13 @@ if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME
     except Exception as e:
         print("Scheduler init note:", e)
 
-# Ensure DB is initialized
-try:
-    init_db()
-    seed_database()
-except Exception as e:
-    print("Database init note:", e)
+# Only run schema init and seeding on local startup (production DB is already migrated)
+if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    try:
+        init_db()
+        seed_database()
+    except Exception as e:
+        print("Database init note:", e)
 
 app = FastAPI(
     title="ATT PER Y API",
