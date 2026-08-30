@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from database import get_db
 from auth import get_current_user
 
-router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
+router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 class MarkAttendanceItem(BaseModel):
     block_id: int

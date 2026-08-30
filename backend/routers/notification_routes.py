@@ -11,7 +11,7 @@ from notifications import (
     dispatch_scheduled_reminders
 )
 
-router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
+router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 class NotificationTimeItem(BaseModel):
     time_of_day: str = Field(..., example="09:00", pattern=r"^\d{2}:\d{2}$")

@@ -44,10 +44,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router)
-app.include_router(section_router)
-app.include_router(attendance_router)
-app.include_router(notification_router)
+# Include routers under both /api and root prefixes for seamless local + Vercel deployment
+for pfx in ["/api", ""]:
+    app.include_router(auth_router, prefix=pfx)
+    app.include_router(section_router, prefix=pfx)
+    app.include_router(attendance_router, prefix=pfx)
+    app.include_router(notification_router, prefix=pfx)
 
 from fastapi.responses import JSONResponse
 import traceback
@@ -65,10 +67,12 @@ async def global_exception_handler(request, exc):
     )
 
 @app.get("/api/health")
+@app.get("/health")
 def health_check():
     return {"status": "ok", "app": "ATT PER Y"}
 
 @app.post("/api/admin/backup")
+@app.post("/admin/backup")
 def trigger_backup(current_user: dict = Depends(get_current_user)):
     # Simple backup endpoint for data durability
     backup_file = backup_db()

@@ -4,7 +4,7 @@ from typing import List, Optional
 from database import get_db
 from auth import get_current_user
 
-router = APIRouter(prefix="/api/sections", tags=["Sections"])
+router = APIRouter(prefix="/sections", tags=["Sections"])
 
 class TimetableBlockItem(BaseModel):
     weekday: int = Field(..., ge=1, le=6, description="1=Mon..6=Sat")

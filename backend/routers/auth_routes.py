@@ -4,7 +4,7 @@ from typing import Optional, List
 from database import get_db
 from auth import hash_pin, verify_pin, create_access_token, get_current_user, check_rate_limit, record_failed_attempt, clear_rate_limit
 
-router = APIRouter(prefix="/api/auth", tags=["Auth"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 class TimetableBlockInput(BaseModel):
     weekday: int = Field(..., ge=1, le=6, description="1=Mon..6=Sat")
