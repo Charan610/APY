@@ -311,6 +311,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       <div
         className="modal-dialog"
         style={{
+          position: 'relative',
+          zIndex: 1,
           maxWidth: '520px',
           width: '95%',
           maxHeight: '88vh',

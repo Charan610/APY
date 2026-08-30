@@ -251,7 +251,11 @@ export default function App() {
             initialTab={settingsTab}
             onClose={() => setShowSettings(false)}
             user={user}
-            onUserUpdated={() => {
+            onUserUpdated={(updatedUser) => {
+              if (updatedUser) {
+                setUser(updatedUser);
+                setStoredUser(updatedUser);
+              }
               initSession();
             }}
           />
