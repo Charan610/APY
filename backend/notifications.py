@@ -4,7 +4,7 @@ import logging
 import base64
 import tempfile
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import pytz
 from pywebpush import webpush, WebPushException
 
@@ -43,7 +43,7 @@ PREBUILT_TIMES = [
 def get_vapid_public_key() -> str:
     return VAPID_PUBLIC_KEY
 
-def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]) -> tuple[bool, Optional[int], str]:
+def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]) -> Tuple[bool, Optional[int], str]:
     """
     Sends a Web Push notification to a browser subscription.
     Automatically logs push service response and cleans up HTTP 404 / 410 expired endpoints.
