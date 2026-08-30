@@ -2,11 +2,18 @@ import time
 import os
 import hashlib
 import secrets
-import jwt
+import base64
+import json
+import hmac
 from typing import Optional, Dict
 from fastapi import HTTPException, Security, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from database import get_db
+
+try:
+    import jwt
+except Exception:
+    jwt = None
 
 try:
     import bcrypt
@@ -82,7 +89,15 @@ def create_access_token(data: dict) -> str:
         to_encode["sub"] = str(to_encode["sub"])
     expire = int(time.time() + TOKEN_EXPIRE_SECONDS)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    if jwt is not None:
+        return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    def encode_part(value):
+        return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+    header = encode_part(json.dumps({"alg": ALGORITHM, "typ": "JWT"}, separators=(",", ":")).encode())
+    body = encode_part(json.dumps(to_encode, separators=(",", ":")).encode())
+    signing_input = f"{header}.{body}".encode("ascii")
+    signature = hmac.new(SECRET_KEY.encode(), signing_input, hashlib.sha256).digest()
+    return f"{header}.{body}.{encode_part(signature)}"
 
 def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)) -> dict:
     if not credentials or not credentials.credentials:
@@ -92,7 +107,18 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
         )
     token = credentials.credentials
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if jwt is not None:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        else:
+            header, body, encoded_signature = token.split(".")
+            signing_input = f"{header}.{body}".encode("ascii")
+            expected_signature = hmac.new(SECRET_KEY.encode(), signing_input, hashlib.sha256).digest()
+            actual_signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+            if not hmac.compare_digest(actual_signature, expected_signature):
+                raise ValueError("Invalid token signature")
+            payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+            if int(payload.get("exp", 0)) < int(time.time()):
+                raise ValueError("Token expired")
         sub_val = payload.get("sub")
         if sub_val is None or str(sub_val) == "None":
             raise HTTPException(

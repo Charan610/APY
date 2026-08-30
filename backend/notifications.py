@@ -5,7 +5,15 @@ import base64
 import tempfile
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
-import pytz
+try:
+    import pytz
+except Exception:
+    from zoneinfo import ZoneInfo
+    class _PytzCompat:
+        @staticmethod
+        def timezone(name):
+            return ZoneInfo(name)
+    pytz = _PytzCompat()
 
 try:
     from pywebpush import webpush, WebPushException
