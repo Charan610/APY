@@ -24,14 +24,15 @@ DEFAULT_DB_PATH = os.path.join(DB_DIR, "attendance.db")
 if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
     TMP_DIR = "/tmp/attendance_data"
     try:
-        os.makedirs(TMP_DIR, exist_ok=True)
+        os.makedirs(TMP_DIR, mode=0o777, exist_ok=True)
     except Exception:
         pass
     DB_PATH = os.path.join(TMP_DIR, "attendance.db")
     BACKUP_DIR = os.path.join(TMP_DIR, "backups")
     if not os.path.exists(DB_PATH) and os.path.exists(DEFAULT_DB_PATH):
         try:
-            shutil.copy2(DEFAULT_DB_PATH, DB_PATH)
+            shutil.copyfile(DEFAULT_DB_PATH, DB_PATH)
+            os.chmod(DB_PATH, 0o666)
         except Exception as e:
             print("DB copy notice:", e)
 else:
