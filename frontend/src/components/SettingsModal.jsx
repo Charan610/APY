@@ -169,6 +169,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
   const handleToggleMasterNotifications = async (enable) => {
     setError('');
     setMsg('');
+    setNotifEnabled(enable);
     setNotifLoading(true);
 
     try {
@@ -183,10 +184,10 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
         setPermissionState(getNotificationPermission());
       }
 
-      setNotifEnabled(enable);
       await saveCurrentReminderPreferences(enable);
       setMsg(enable ? 'Daily reminders enabled!' : 'Daily reminders paused.');
     } catch (err) {
+      setNotifEnabled(!enable); // Revert on failure
       setError(err.message || 'Failed to change notification settings');
       setPermissionState(getNotificationPermission());
     } finally {

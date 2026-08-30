@@ -73,14 +73,21 @@ export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) 
 
   // 4. Subscribe to push manager with VAPID key
   const convertedKey = urlBase64ToUint8Array(keyToUse);
-  let subscription = await registration.pushManager.getSubscription();
-
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedKey
-    });
+  
+  // Unsubscribe any previous/stale subscription so the active VAPID key is guaranteed
+  try {
+    const existingSub = await registration.pushManager.getSubscription();
+    if (existingSub) {
+      await existingSub.unsubscribe();
+    }
+  } catch (e) {
+    console.warn('Subscription reset note:', e);
   }
+
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: convertedKey
+  });
 
   const subJson = subscription.toJSON();
   return {
