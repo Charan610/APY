@@ -51,11 +51,10 @@ class UpdateBaselineRequest(BaseModel):
     baseline_attended: int = Field(..., ge=0)
     baseline_total: int = Field(..., ge=0)
     baseline_date: Optional[str] = None
+    section_id: Optional[int] = None
 
-    @field_validator("baseline_total")
-    @classmethod
-    def validate_total(cls, v: int, values):
-        return v
+class UpdateSectionRequest(BaseModel):
+    section_id: int
 
 @router.post("/register")
 def register(req: RegisterRequest):
@@ -209,12 +208,41 @@ def update_baseline(req: UpdateBaselineRequest, current_user: dict = Depends(get
         )
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            UPDATE users 
-            SET baseline_attended = ?, baseline_total = ?, baseline_date = ?
-            WHERE id = ?
-            """,
-            (req.baseline_attended, req.baseline_total, req.baseline_date, current_user["id"])
-        )
-        return {"status": "success", "message": "Baseline attendance updated"}
+        if req.section_id:
+            cursor.execute("SELECT id FROM sections WHERE id = ?", (req.section_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Section not found")
+            cursor.execute(
+                """
+                UPDATE users 
+                SET baseline_attended = ?, baseline_total = ?, baseline_date = ?, section_id = ?
+                WHERE id = ?
+                """,
+                (req.baseline_attended, req.baseline_total, req.baseline_date, req.section_id, current_user["id"])
+            )
+        else:
+            cursor.execute(
+                """
+                UPDATE users 
+                SET baseline_attended = ?, baseline_total = ?, baseline_date = ?
+                WHERE id = ?
+                """,
+                (req.baseline_attended, req.baseline_total, req.baseline_date, current_user["id"])
+            )
+        return {"status": "success", "message": "Baseline attendance and section updated"}
+
+@router.put("/section")
+def update_section(req: UpdateSectionRequest, current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, branch, section_label FROM sections WHERE id = ?", (req.section_id,))
+        sec = cursor.fetchone()
+        if not sec:
+            raise HTTPException(status_code=404, detail="Section not found")
+            
+        cursor.execute("UPDATE users SET section_id = ? WHERE id = ?", (req.section_id, current_user["id"]))
+        return {
+            "status": "success", 
+            "message": f"Section updated to {sec['branch']} - {sec['section_label']}",
+            "section": dict(sec)
+        }

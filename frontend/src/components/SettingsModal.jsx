@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Database, CheckCircle2, AlertCircle, X, Info, ExternalLink } from 'lucide-react';
+import { Database, CheckCircle2, AlertCircle, X, Info, ExternalLink, School } from 'lucide-react';
 
 const GithubIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -17,9 +17,11 @@ const InstagramIcon = () => (
 );
 
 export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) {
-  const [activeTab, setActiveTab] = useState('baseline'); // 'baseline' | 'about'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'about'
 
-  // Baseline state
+  // Profile & Baseline state
+  const [sections, setSections] = useState([]);
+  const [selectedSectionId, setSelectedSectionId] = useState(user?.section_id || 1);
   const [attended, setAttended] = useState(user?.baseline_attended || 0);
   const [total, setTotal] = useState(user?.baseline_total || 0);
   const [bDate, setBDate] = useState(user?.baseline_date || '2026-08-24');
@@ -29,9 +31,46 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (isOpen) {
+      loadSections();
+      if (user) {
+        setSelectedSectionId(user.section_id || 1);
+        setAttended(user.baseline_attended || 0);
+        setTotal(user.baseline_total || 0);
+        setBDate(user.baseline_date || '2026-08-24');
+      }
+    }
+  }, [isOpen, user]);
+
+  const loadSections = async () => {
+    try {
+      const data = await api.getSections();
+      if (data?.sections?.length) {
+        setSections(data.sections);
+      } else {
+        setSections([
+          { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 34 },
+          { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 34 },
+          { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 34 },
+          { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 34 },
+          { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
+        ]);
+      }
+    } catch {
+      setSections([
+        { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 34 },
+        { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 34 },
+        { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 34 },
+        { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 34 },
+        { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
+      ]);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const handleSaveBaseline = async (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     setError('');
     setMsg('');
@@ -49,12 +88,16 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
       await api.updateBaseline({
         baseline_attended: att,
         baseline_total: tot,
-        baseline_date: tot > 0 ? bDate : null
+        baseline_date: tot > 0 ? bDate : null,
+        section_id: selectedSectionId
       });
-      setMsg('Baseline attendance updated.');
+      setMsg('Profile & Section settings updated successfully!');
       onUserUpdated();
+      setTimeout(() => {
+        setMsg('');
+      }, 2500);
     } catch (err) {
-      setError(err.message || 'Failed to update baseline');
+      setError(err.message || 'Failed to update settings');
     } finally {
       setLoading(false);
     }
@@ -66,7 +109,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
     setBackupLoading(true);
     try {
       const res = await api.triggerBackup();
-      setMsg(`Backup created: ${res.backup_file}`);
+      setMsg(`Backup snapshot created: ${res.backup_file}`);
     } catch (err) {
       setError(err.message || 'Backup failed');
     } finally {
@@ -80,9 +123,9 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--rule)', paddingBottom: '0.65rem' }}>
           <div>
-            <h3 className="heading-ledger" style={{ fontSize: '1.15rem' }}>Settings & About</h3>
+            <h3 className="heading-ledger" style={{ fontSize: '1.15rem' }}>Settings & Profile</h3>
             <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
-              {user?.register_number} · Section {user?.section_label} ({user?.branch})
+              {user?.register_number} · Currently <strong>Section {user?.section_label} ({user?.branch})</strong>
             </div>
           </div>
           <button type="button" className="btn-icon" onClick={onClose}>
@@ -94,11 +137,11 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
         <div style={{ display: 'flex', background: 'var(--surface-alt)', padding: '3px', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', border: '1px solid var(--rule)' }}>
           <button
             type="button"
-            className={`btn ${activeTab === 'baseline' ? 'btn-primary' : 'btn-secondary'}`}
+            className={`btn ${activeTab === 'profile' ? 'btn-primary' : 'btn-secondary'}`}
             style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.8rem' }}
-            onClick={() => { setActiveTab('baseline'); setMsg(''); setError(''); }}
+            onClick={() => { setActiveTab('profile'); setMsg(''); setError(''); }}
           >
-            Baseline Records
+            Profile & Section
           </button>
           <button
             type="button"
@@ -124,15 +167,41 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
           </div>
         )}
 
-        {activeTab === 'baseline' ? (
+        {activeTab === 'profile' ? (
           <div>
-            <form onSubmit={handleSaveBaseline}>
+            <form onSubmit={handleSaveProfile}>
+              {/* Section Change Picker */}
+              <div style={{ marginBottom: '1.25rem', background: 'var(--surface-alt)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--rule)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem' }}>
+                  <School size={16} color="var(--ink)" />
+                  <label className="form-label" style={{ marginBottom: 0, fontWeight: 700 }}>
+                    Change Class Section
+                  </label>
+                </div>
+                <p style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginBottom: '0.6rem' }}>
+                  If you picked the wrong section during registration, switch it here. Your daily timetable will immediately update to this section.
+                </p>
+                <select
+                  className="form-control"
+                  value={selectedSectionId}
+                  onChange={(e) => setSelectedSectionId(parseInt(e.target.value))}
+                  style={{ fontWeight: 600 }}
+                >
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.branch} — Section {s.section_label} ({s.weekly_periods || 34} Periods/Week)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Historical Baseline Figures */}
               <div style={{ marginBottom: '1rem' }}>
-                <h4 style={{ fontSize: '0.9rem', color: 'var(--ink)', fontWeight: 700, marginBottom: '0.25rem' }}>
-                  Historical Baseline Figures
+                <h4 style={{ fontSize: '0.875rem', color: 'var(--ink)', fontWeight: 700, marginBottom: '0.2rem' }}>
+                  Historical Baseline Cutoff
                 </h4>
-                <p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: '0.75rem' }}>
-                  Period counts from past terms prior to daily register logging.
+                <p style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginBottom: '0.65rem' }}>
+                  Total periods attended and held prior to beginning daily register logging.
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.65rem' }}>
@@ -168,11 +237,14 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
                     value={bDate || ''}
                     onChange={(e) => setBDate(e.target.value)}
                   />
+                  <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
+                    All periods on/before this date are locked into baseline figures.
+                  </div>
                 </div>
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                {loading ? 'Saving...' : 'Update Baseline Figures'}
+                {loading ? 'Saving...' : 'Save Section & Baseline Changes'}
               </button>
             </form>
 
