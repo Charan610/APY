@@ -6,7 +6,14 @@ import tempfile
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 import pytz
-from pywebpush import webpush, WebPushException
+
+try:
+    from pywebpush import webpush, WebPushException
+    HAS_WEBPUSH = True
+except Exception as e:
+    webpush = None
+    WebPushException = Exception
+    HAS_WEBPUSH = False
 
 logger = logging.getLogger("notifications")
 logger.setLevel(logging.INFO)
@@ -49,6 +56,10 @@ def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]
     Automatically logs push service response and cleans up HTTP 404 / 410 expired endpoints.
     Returns: (success: bool, status_code: Optional[int], message: str)
     """
+    if not HAS_WEBPUSH or webpush is None:
+        logger.warning("[WebPush] pywebpush not available in this environment.")
+        return (False, None, "Web Push library not loaded in this environment.")
+
     sub_info = {
         "endpoint": subscription["endpoint"],
         "keys": {
