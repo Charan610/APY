@@ -1,5 +1,5 @@
 from database import get_db, init_db
-import bcrypt
+from auth import hash_pin
 
 # Weekday constants: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
 
@@ -190,8 +190,7 @@ def seed_database():
             test_reg = "23B91A05C0"
             cursor.execute("SELECT id FROM users WHERE register_number = ?", (test_reg,))
             if not cursor.fetchone():
-                pin_salt = bcrypt.gensalt()
-                pin_hash = bcrypt.hashpw("1234".encode('utf-8'), pin_salt).decode('utf-8')
+                pin_hash = hash_pin("1234")
                 cursor.execute(
                     """
                     INSERT INTO users (register_number, pin_hash, section_id, baseline_attended, baseline_total, baseline_date)

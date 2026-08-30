@@ -18,7 +18,10 @@ DEFAULT_DB_PATH = os.path.join(DB_DIR, "attendance.db")
 # Local SQLite directory fallback
 if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
     TMP_DIR = "/tmp/attendance_data"
-    os.makedirs(TMP_DIR, exist_ok=True)
+    try:
+        os.makedirs(TMP_DIR, exist_ok=True)
+    except Exception:
+        pass
     DB_PATH = os.path.join(TMP_DIR, "attendance.db")
     BACKUP_DIR = os.path.join(TMP_DIR, "backups")
     if not os.path.exists(DB_PATH) and os.path.exists(DEFAULT_DB_PATH):
@@ -30,7 +33,10 @@ else:
     DB_PATH = DEFAULT_DB_PATH
     BACKUP_DIR = os.path.join(DB_DIR, "backups")
 
-os.makedirs(BACKUP_DIR, exist_ok=True)
+try:
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+except Exception:
+    pass
 
 # ---------------------------------------------------------------------------
 # Turso Cloud SQLite HTTP Driver (High-Performance Keep-Alive Pooled)
