@@ -245,20 +245,36 @@ class TursoConnection:
 # ---------------------------------------------------------------------------
 # Database Connection Manager
 # ---------------------------------------------------------------------------
-def is_turso_configured() -> bool:
-    return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and len(TURSO_AUTH_TOKEN) > 20)
+_local_schema_initialized = False
 
 def get_db_connection():
+    global _local_schema_initialized
     if is_turso_configured():
         return TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
     else:
         conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         try:
-            conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
         except Exception:
             pass
+            
+        if not _local_schema_initialized:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+                if not cursor.fetchone():
+                    # Database is brand new in /tmp -> create tables & seed tester data
+                    init_db()
+                    try:
+                        from seed_data import seed_database
+                        seed_database()
+                    except Exception:
+                        pass
+                _local_schema_initialized = True
+            except Exception as e:
+                logger.warning(f"Auto-init DB check notice: {e}")
+                
         return conn
 
 @contextmanager
