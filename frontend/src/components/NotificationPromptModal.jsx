@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { requestNotificationPermissionAndSubscribe, isPushSupported } from '../notifications';
 import { Bell, Clock, Check, X, Sparkles, Plus, Trash2, AlertCircle } from 'lucide-react';
@@ -19,10 +19,21 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
   const [customTimes, setCustomTimes] = useState([]);
   const [newTimeInput, setNewTimeInput] = useState('');
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleNotNow();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleNotNow = async () => {
-    // Dismiss without nagging
     try {
       localStorage.setItem('apy_notif_prompt_dismissed', 'true');
     } catch {}
@@ -37,17 +48,14 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
         throw new Error('Push notifications are not supported on this browser.');
       }
 
-      // Fetch VAPID public key
       const config = await api.getNotificationConfig();
       if (!config.vapid_public_key) {
         throw new Error('VAPID public key not available on server.');
       }
 
-      // Request browser permission & subscribe
       const subscription = await requestNotificationPermissionAndSubscribe(config.vapid_public_key);
       await api.savePushSubscription(subscription);
 
-      // Move to time customization step
       setStep('times');
     } catch (err) {
       setError(err.message || 'Could not enable notifications.');
@@ -80,7 +88,6 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
     try {
       const timesToSave = [];
 
-      // Prebuilts
       if (selectedPrebuilts['09:00']) {
         timesToSave.push({ time_of_day: '09:00', label: 'Morning Check', is_prebuilt: true });
       }
@@ -91,7 +98,6 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
         timesToSave.push({ time_of_day: '16:30', label: 'End of Day Register', is_prebuilt: true });
       }
 
-      // Custom times
       for (const ct of customTimes) {
         timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
       }
@@ -115,7 +121,15 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
   };
 
   return (
-    <div className="modal-backdrop" style={{ zIndex: 1000 }}>
+    <div
+      className="modal-backdrop"
+      style={{ zIndex: 1000 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleNotNow();
+        }
+      }}
+    >
       <div className="modal-dialog" style={{ maxWidth: '420px', padding: '1.4rem' }}>
         
         {/* Header Icon */}
@@ -132,8 +146,13 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
           }}>
             <Bell size={22} />
           </div>
-          <button type="button" className="btn-icon" onClick={handleNotNow}>
-            <X size={18} />
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleNotNow}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', padding: '0.3rem 0.6rem' }}
+          >
+            <X size={16} /> Close
           </button>
         </div>
 
@@ -197,7 +216,6 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
             </div>
           </div>
         ) : (
-          /* Step 2: Choose Times */
           <div>
             <h3 className="heading-ledger" style={{ fontSize: '1.15rem', marginBottom: '0.3rem' }}>
               Choose Reminder Times
