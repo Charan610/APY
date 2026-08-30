@@ -4,11 +4,5 @@
       "source": "/api/:path*",
       "destination": "/api/index.py"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/notifications/cron",
-      "schedule": "0 9,12,16 * * *"
-    }
   ]
 }
