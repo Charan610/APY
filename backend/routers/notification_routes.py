@@ -190,14 +190,19 @@ def send_test_notification(current_user: dict = Depends(get_current_user)):
     }
 
     sent_count = 0
+    errors = []
     for s in subs:
-        if send_push_notification(dict(s), test_payload):
+        success, code, msg = send_push_notification(dict(s), test_payload)
+        if success:
             sent_count += 1
+        else:
+            errors.append(msg)
 
     if sent_count == 0:
         return {
             "status": "warning",
-            "message": "Push notification sent to notification service. If you didn't receive it, check if notifications are allowed in browser settings."
+            "message": "Push notification could not be delivered to the registered browser endpoint.",
+            "details": errors
         }
 
     return {

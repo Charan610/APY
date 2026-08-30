@@ -43,10 +43,11 @@ PREBUILT_TIMES = [
 def get_vapid_public_key() -> str:
     return VAPID_PUBLIC_KEY
 
-def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]) -> bool:
+def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]) -> tuple[bool, Optional[int], str]:
     """
     Sends a Web Push notification to a browser subscription.
-    Automatically cleans up HTTP 404 / 410 expired endpoints.
+    Automatically logs push service response and cleans up HTTP 404 / 410 expired endpoints.
+    Returns: (success: bool, status_code: Optional[int], message: str)
     """
     sub_info = {
         "endpoint": subscription["endpoint"],
@@ -57,33 +58,38 @@ def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]
     }
     
     try:
-        webpush(
+        resp = webpush(
             subscription_info=sub_info,
             data=json.dumps(payload),
             vapid_private_key=VAPID_PEM_PATH if os.path.exists(VAPID_PEM_PATH) else VAPID_PRIVATE_PEM,
             vapid_claims=VAPID_CLAIMS,
             ttl=3600
         )
-        return True
+        status_code = resp.status_code if resp else 201
+        logger.info(f"[WebPush] Successfully delivered push to {subscription['endpoint'][:40]}... (Status: {status_code})")
+        return (True, status_code, "Delivered successfully")
     except WebPushException as ex:
         status_code = getattr(ex.response, "status_code", None) if getattr(ex, "response", None) else None
+        body_text = ex.response.text if (getattr(ex, "response", None) and hasattr(ex.response, "text")) else str(ex)
+        
+        logger.warning(f"[WebPush] Push delivery failed. Status: {status_code}, Body: {body_text}")
         
         # 404 Not Found or 410 Gone means subscription is dead / revoked
         if status_code in (404, 410) or "410" in str(ex) or "404" in str(ex):
-            logger.info(f"Removing expired subscription {subscription['endpoint']}")
+            logger.info(f"[WebPush] Pruning expired subscription {subscription['endpoint']}")
             try:
                 from database import get_db
                 with get_db() as db:
                     cursor = db.cursor()
                     cursor.execute("DELETE FROM notification_subscriptions WHERE endpoint = ?", (subscription["endpoint"],))
             except Exception as e:
-                logger.error(f"Error cleaning dead subscription: {e}")
-        else:
-            logger.warning(f"WebPush response warning: {ex}")
-        return False
+                logger.error(f"[WebPush] Error cleaning dead subscription: {e}")
+            return (False, status_code or 410, "Push subscription expired or was revoked in browser.")
+        
+        return (False, status_code, f"Push service error ({status_code}): {body_text}")
     except Exception as ex:
-        logger.error(f"Unexpected push error: {ex}")
-        return False
+        logger.error(f"[WebPush] Unexpected push error: {type(ex).__name__} - {ex}")
+        return (False, None, str(ex))
 
 def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -134,7 +140,7 @@ def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[
                 subs = cursor.fetchall()
 
                 for sub in subs:
-                    success = send_push_notification(dict(sub), payload)
+                    success, code, msg = send_push_notification(dict(sub), payload)
                     if success:
                         results["notifications_sent"] += 1
                     else:
