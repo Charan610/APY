@@ -140,8 +140,12 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
 
     // Non-blocking background save
     try {
-      await api.markAttendance(currentDate, [{ block_id: blockId, status: targetStatus }]);
-      onAttendanceUpdated();
+      const res = await api.markAttendance(currentDate, [{ block_id: blockId, status: targetStatus }]);
+      if (res?.summary) {
+        onAttendanceUpdated(res.summary);
+      } else {
+        onAttendanceUpdated();
+      }
     } catch (err) {
       console.error('Failed to save attendance:', err);
       loadLogs();
@@ -158,8 +162,12 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
 
     try {
       setSaving(true);
-      await api.markAttendance(currentDate, entries);
-      onAttendanceUpdated();
+      const res = await api.markAttendance(currentDate, entries);
+      if (res?.summary) {
+        onAttendanceUpdated(res.summary);
+      } else {
+        onAttendanceUpdated();
+      }
     } catch (err) {
       alert(err.message || 'Failed to mark all');
       loadLogs();

@@ -259,6 +259,7 @@ def init_db():
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_blocks_sec_day ON timetable_blocks(section_id, weekday);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_blocks_sec ON timetable_blocks(section_id);")
 
             # Daily logs table
             cursor.execute("""
@@ -275,6 +276,8 @@ def init_db():
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_date ON daily_logs(user_id, log_date);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_block ON daily_logs(user_id, block_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_block ON daily_logs(block_id);")
     except Exception as e:
         print("Init DB notice:", e)
 

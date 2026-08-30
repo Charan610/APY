@@ -126,6 +126,74 @@ def get_daily_logs(
             "logs_by_date": logs_by_date
         }
 
+def compute_summary_for_user(conn, current_user: dict) -> dict:
+    user_id = current_user["id"]
+    section_id = current_user.get("section_id") or 1
+    baseline_attended = current_user.get("baseline_attended") or 0
+    baseline_total = current_user.get("baseline_total") or 0
+    baseline_date = current_user.get("baseline_date")
+    
+    cursor = conn.cursor()
+    # High-performance DB-engine aggregation (GROUP BY subject)
+    cursor.execute(
+        """
+        SELECT 
+            b.subject,
+            COALESCE(SUM(CASE WHEN l.status = 'present' THEN b.periods ELSE 0 END), 0) AS attended,
+            COALESCE(SUM(CASE WHEN l.status IN ('present', 'absent') THEN b.periods ELSE 0 END), 0) AS total,
+            COALESCE(SUM(CASE WHEN l.status = 'holiday' THEN b.periods ELSE 0 END), 0) AS holiday_periods
+        FROM timetable_blocks b
+        LEFT JOIN daily_logs l 
+               ON b.id = l.block_id 
+              AND l.user_id = ? 
+              AND (l.log_date > ? OR ? IS NULL)
+        WHERE b.section_id = ?
+        GROUP BY b.subject
+        ORDER BY b.subject
+        """,
+        (user_id, baseline_date, baseline_date, section_id)
+    )
+    rows = cursor.fetchall()
+    
+    subject_results = {}
+    logged_attended = 0
+    logged_total = 0
+    
+    for r in rows:
+        subj = r["subject"]
+        att = r["attended"]
+        tot = r["total"]
+        hol = r["holiday_periods"]
+        
+        logged_attended += att
+        logged_total += tot
+        bunk_info = calculate_bunk_stats(att, tot)
+        subject_results[subj] = {
+            "subject": subj,
+            "attended": att,
+            "total": tot,
+            "holiday_periods": hol,
+            **bunk_info
+        }
+        
+    overall_attended = baseline_attended + logged_attended
+    overall_total = baseline_total + logged_total
+    overall_bunk_info = calculate_bunk_stats(overall_attended, overall_total)
+    
+    return {
+        "overall": {
+            "attended": overall_attended,
+            "total": overall_total,
+            "baseline_attended": baseline_attended,
+            "baseline_total": baseline_total,
+            "baseline_date": baseline_date,
+            "logged_attended": logged_attended,
+            "logged_total": logged_total,
+            **overall_bunk_info
+        },
+        "subjects": subject_results
+    }
+
 @router.post("/mark")
 def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
@@ -166,92 +234,18 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
                     (user_id, req.log_date, entry.block_id, entry.status)
                 )
             
-        return {"status": "success", "message": f"Updated attendance entries for {req.log_date}."}
+        # Return updated summary directly in response (eliminating 2nd HTTP roundtrip)
+        fresh_summary = compute_summary_for_user(conn, current_user)
+        return {
+            "status": "success", 
+            "message": f"Updated attendance entries for {req.log_date}.",
+            "summary": fresh_summary
+        }
 
 @router.get("/summary")
 def get_attendance_summary(current_user: dict = Depends(get_current_user)):
-    user_id = current_user["id"]
-    section_id = current_user.get("section_id") or 1
-    baseline_attended = current_user.get("baseline_attended") or 0
-    baseline_total = current_user.get("baseline_total") or 0
-    baseline_date = current_user.get("baseline_date")
-    
     with get_db() as conn:
-        cursor = conn.cursor()
-        
-        # Single ultra-fast combined query for subjects and logs
-        cursor.execute(
-            """
-            SELECT 
-                b.subject, 
-                b.periods, 
-                l.status,
-                l.log_date
-            FROM timetable_blocks b
-            LEFT JOIN daily_logs l 
-                   ON b.id = l.block_id 
-                  AND l.user_id = ? 
-                  AND (l.log_date > ? OR ? IS NULL)
-            WHERE b.section_id = ?
-            ORDER BY b.subject
-            """,
-            (user_id, baseline_date, baseline_date, section_id)
-        )
-        rows = cursor.fetchall()
-        
-        subject_stats: Dict[str, dict] = {}
-        logged_attended = 0
-        logged_total = 0
-        
-        for row in rows:
-            subj = row["subject"]
-            periods = row["periods"]
-            status = row["status"]
-            
-            if subj not in subject_stats:
-                subject_stats[subj] = {"attended": 0, "total": 0, "holiday_periods": 0}
-                
-            if status == "present":
-                subject_stats[subj]["attended"] += periods
-                subject_stats[subj]["total"] += periods
-                logged_attended += periods
-                logged_total += periods
-            elif status == "absent":
-                subject_stats[subj]["total"] += periods
-                logged_total += periods
-            elif status == "holiday":
-                subject_stats[subj]["holiday_periods"] += periods
-                
-        # Compute subject calculations
-        subject_results = {}
-        for subj, counts in subject_stats.items():
-            bunk_info = calculate_bunk_stats(counts["attended"], counts["total"])
-            subject_results[subj] = {
-                "subject": subj,
-                "attended": counts["attended"],
-                "total": counts["total"],
-                "holiday_periods": counts["holiday_periods"],
-                **bunk_info
-            }
-            
-        # Compute overall stats (including baseline)
-        overall_attended = baseline_attended + logged_attended
-        overall_total = baseline_total + logged_total
-        overall_bunk_info = calculate_bunk_stats(overall_attended, overall_total)
-        
-        return {
-            "overall": {
-                "attended": overall_attended,
-                "total": overall_total,
-                "baseline_attended": baseline_attended,
-                "baseline_total": baseline_total,
-                "baseline_date": baseline_date,
-                "logged_attended": logged_attended,
-                "logged_total": logged_total,
-                **overall_bunk_info
-            },
-            "subjects": subject_results
-        }
+        return compute_summary_for_user(conn, current_user)
 
 @router.get("/forecast")
 def forecast_attendance(

@@ -61,6 +61,17 @@ export default function App() {
     }
   };
 
+  const handleAttendanceUpdated = (freshSummary) => {
+    if (freshSummary) {
+      setSummary(freshSummary);
+      try {
+        localStorage.setItem('apy_summary_cache', JSON.stringify(freshSummary));
+      } catch {}
+    } else {
+      loadSummary();
+    }
+  };
+
   const loadSummary = async () => {
     try {
       const data = await api.getSummary();
@@ -115,7 +126,7 @@ export default function App() {
             {activeTab === 'today' && (
               <TodayTab
                 user={user}
-                onAttendanceUpdated={loadSummary}
+                onAttendanceUpdated={handleAttendanceUpdated}
               />
             )}
 
