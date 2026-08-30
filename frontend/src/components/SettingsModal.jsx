@@ -1,6 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Database, CheckCircle2, AlertCircle, X, Info, ExternalLink, School } from 'lucide-react';
+import {
+  requestNotificationPermissionAndSubscribe,
+  unsubscribeFromPush,
+  isPushSupported,
+  getNotificationPermission
+} from '../notifications';
+import {
+  Database,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Info,
+  ExternalLink,
+  School,
+  Bell,
+  Clock,
+  Plus,
+  Trash2,
+  Send,
+  Sparkles,
+  AlertTriangle,
+  GraduationCap
+} from 'lucide-react';
 
 const GithubIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -17,7 +39,7 @@ const InstagramIcon = () => (
 );
 
 export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) {
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'about'
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'reminders' | 'about'
 
   // Profile & Baseline state
   const [sections, setSections] = useState([]);
@@ -31,9 +53,25 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
+  // Reminders state
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [vapidPublicKey, setVapidPublicKey] = useState('');
+  const [selectedPrebuilts, setSelectedPrebuilts] = useState({
+    '09:00': true,
+    '12:00': true,
+    '16:30': true
+  });
+  const [customTimes, setCustomTimes] = useState([]);
+  const [newCustomTime, setNewCustomTime] = useState('');
+  const [testNotifLoading, setTestNotifLoading] = useState(false);
+  const [permissionState, setPermissionState] = useState('default');
+
   useEffect(() => {
     if (isOpen) {
       loadSections();
+      loadNotificationConfig();
+      setPermissionState(getNotificationPermission());
       if (user) {
         setSelectedSectionId(user.section_id || 1);
         setAttended(user.baseline_attended || 0);
@@ -48,58 +86,180 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
       const data = await api.getSections();
       if (data?.sections?.length) {
         setSections(data.sections);
-      } else {
-        setSections([
-          { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 34 },
-          { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 34 },
-          { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 34 },
-          { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 34 },
-          { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
-        ]);
       }
-    } catch {
-      setSections([
-        { id: 1, branch: 'CSE', section_label: 'A', weekly_periods: 34 },
-        { id: 2, branch: 'CSE', section_label: 'B', weekly_periods: 34 },
-        { id: 3, branch: 'CSE', section_label: 'C', weekly_periods: 34 },
-        { id: 4, branch: 'CSE', section_label: 'D', weekly_periods: 34 },
-        { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
-      ]);
+    } catch (e) {
+      console.error('Error loading sections:', e);
     }
   };
 
-  if (!isOpen) return null;
+  const loadNotificationConfig = async () => {
+    try {
+      const config = await api.getNotificationConfig();
+      setVapidPublicKey(config.vapid_public_key || '');
+      setNotifEnabled(Boolean(config.enabled));
+
+      const activeTimes = config.active_times || [];
+      const prebuilts = { '09:00': false, '12:00': false, '16:30': false };
+      const customs = [];
+
+      for (const t of activeTimes) {
+        if (t.is_prebuilt && prebuilts.hasOwnProperty(t.time_of_day)) {
+          prebuilts[t.time_of_day] = true;
+        } else if (!t.is_prebuilt) {
+          customs.push(t.time_of_day);
+        }
+      }
+
+      // If user had no saved active times yet, default prebuilts to true
+      if (!config.has_preferences) {
+        prebuilts['09:00'] = true;
+        prebuilts['12:00'] = true;
+        prebuilts['16:30'] = true;
+      }
+
+      setSelectedPrebuilts(prebuilts);
+      setCustomTimes(customs.sort());
+    } catch (e) {
+      console.error('Error loading notification config:', e);
+    }
+  };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setError('');
     setMsg('');
-
-    const att = parseInt(attended) || 0;
-    const tot = parseInt(total) || 0;
-
-    if (tot < att) {
-      setError('Baseline total cannot be less than attended.');
-      return;
-    }
-
     setLoading(true);
+
     try {
+      const att = parseInt(attended) || 0;
+      const tot = parseInt(total) || 0;
+
+      if (tot < att) {
+        setError('Baseline total cannot be less than attended.');
+        setLoading(false);
+        return;
+      }
+
+      // 1. Update Baseline
       await api.updateBaseline({
         baseline_attended: att,
         baseline_total: tot,
         baseline_date: tot > 0 ? bDate : null,
-        section_id: selectedSectionId
       });
-      setMsg('Profile & Section settings updated successfully!');
-      onUserUpdated();
-      setTimeout(() => {
-        setMsg('');
-      }, 2500);
+
+      // 2. Update Section if changed
+      if (selectedSectionId !== user?.section_id) {
+        await api.updateSection(selectedSectionId);
+      }
+
+      setMsg('Profile, Section, and Baseline updated successfully!');
+      
+      const freshUser = await api.getMe();
+      if (freshUser?.user && onUserUpdated) {
+        onUserUpdated(freshUser.user);
+      }
     } catch (err) {
       setError(err.message || 'Failed to update settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleMasterNotifications = async (enable) => {
+    setError('');
+    setMsg('');
+    setNotifLoading(true);
+
+    try {
+      if (enable) {
+        if (!isPushSupported()) {
+          throw new Error('Web Push notifications are not supported by your current browser.');
+        }
+
+        // Request browser permission & subscribe
+        const sub = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
+        await api.savePushSubscription(sub);
+        setPermissionState(getNotificationPermission());
+      }
+
+      setNotifEnabled(enable);
+      await saveCurrentReminderPreferences(enable);
+      setMsg(enable ? 'Daily reminders enabled!' : 'Daily reminders paused.');
+    } catch (err) {
+      setError(err.message || 'Failed to change notification settings');
+      setPermissionState(getNotificationPermission());
+    } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  const saveCurrentReminderPreferences = async (enabledStatus) => {
+    const timesToSave = [];
+    if (selectedPrebuilts['09:00']) {
+      timesToSave.push({ time_of_day: '09:00', label: 'Morning Check', is_prebuilt: true });
+    }
+    if (selectedPrebuilts['12:00']) {
+      timesToSave.push({ time_of_day: '12:00', label: 'Midday Check', is_prebuilt: true });
+    }
+    if (selectedPrebuilts['16:30']) {
+      timesToSave.push({ time_of_day: '16:30', label: 'End of Day Register', is_prebuilt: true });
+    }
+    for (const ct of customTimes) {
+      timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
+    }
+
+    await api.updateNotificationPreferences({
+      enabled: enabledStatus,
+      times: timesToSave
+    });
+  };
+
+  const handleSaveReminders = async () => {
+    setError('');
+    setMsg('');
+    setNotifLoading(true);
+    try {
+      if (notifEnabled && permissionState !== 'granted') {
+        const sub = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
+        await api.savePushSubscription(sub);
+        setPermissionState(getNotificationPermission());
+      }
+      await saveCurrentReminderPreferences(notifEnabled);
+      setMsg('Reminder schedule saved successfully!');
+    } catch (err) {
+      setError(err.message || 'Failed to save reminders');
+    } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  const handleAddCustomTime = () => {
+    if (!newCustomTime) return;
+    if (customTimes.includes(newCustomTime)) return;
+    setCustomTimes(prev => [...prev, newCustomTime].sort());
+    setNewCustomTime('');
+  };
+
+  const handleRemoveCustomTime = (timeToRemove) => {
+    setCustomTimes(prev => prev.filter(t => t !== timeToRemove));
+  };
+
+  const handleSendTestNotification = async () => {
+    setError('');
+    setMsg('');
+    setTestNotifLoading(true);
+    try {
+      if (permissionState !== 'granted') {
+        const sub = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
+        await api.savePushSubscription(sub);
+        setPermissionState(getNotificationPermission());
+      }
+      const res = await api.sendTestNotification();
+      setMsg(res.message || 'Test notification sent to your device!');
+    } catch (err) {
+      setError(err.message || 'Failed to send test notification');
+    } finally {
+      setTestNotifLoading(false);
     }
   };
 
@@ -119,13 +279,13 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
 
   return (
     <div className="modal-backdrop">
-      <div className="modal-dialog">
+      <div className="modal-dialog" style={{ maxWidth: '480px' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--rule)', paddingBottom: '0.65rem' }}>
           <div>
-            <h3 className="heading-ledger" style={{ fontSize: '1.15rem' }}>Settings & Profile</h3>
+            <h3 className="heading-ledger" style={{ fontSize: '1.15rem' }}>Settings & Preferences</h3>
             <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
-              {user?.register_number} · Currently <strong>Section {user?.section_label} ({user?.branch})</strong>
+              {user?.register_number} · Section <strong>{user?.section_label} ({user?.branch})</strong>
             </div>
           </div>
           <button type="button" className="btn-icon" onClick={onClose}>
@@ -138,18 +298,26 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
           <button
             type="button"
             className={`btn ${activeTab === 'profile' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.8rem' }}
+            style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.78rem' }}
             onClick={() => { setActiveTab('profile'); setMsg(''); setError(''); }}
           >
             Profile & Section
           </button>
           <button
             type="button"
+            className={`btn ${activeTab === 'reminders' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+            onClick={() => { setActiveTab('reminders'); setMsg(''); setError(''); }}
+          >
+            <Bell size={13} /> Reminders
+          </button>
+          <button
+            type="button"
             className={`btn ${activeTab === 'about' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ flex: 1, border: 'none', padding: '0.4rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+            style={{ flex: 0.8, border: 'none', padding: '0.4rem', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
             onClick={() => { setActiveTab('about'); setMsg(''); setError(''); }}
           >
-            <Info size={14} /> About
+            <Info size={13} /> About
           </button>
         </div>
 
@@ -167,7 +335,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
           </div>
         )}
 
-        {activeTab === 'profile' ? (
+        {/* Tab 1: Profile & Baseline */}
+        {activeTab === 'profile' && (
           <div>
             <form onSubmit={handleSaveProfile}>
               {/* Section Change Picker */}
@@ -179,7 +348,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
                   </label>
                 </div>
                 <p style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginBottom: '0.6rem' }}>
-                  If you picked the wrong section during registration, switch it here. Your daily timetable will immediately update to this section.
+                  If you picked the wrong section during registration, switch it here. Your daily timetable will immediately update.
                 </p>
                 <select
                   className="form-control"
@@ -259,19 +428,226 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated }) 
               </button>
             </div>
           </div>
-        ) : (
-          /* About Tab */
+        )}
+
+        {/* Tab 2: Reminders & Notifications */}
+        {activeTab === 'reminders' && (
+          <div>
+            {/* Master Switch Card */}
+            <div style={{
+              background: 'var(--surface-alt)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.9rem',
+              border: '1px solid var(--rule)',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Bell size={16} color={notifEnabled ? 'var(--good)' : 'var(--ink-soft)'} />
+                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--ink)' }}>
+                    Daily Attendance Reminders
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginTop: '0.15rem' }}>
+                  {notifEnabled ? 'Active · Push alerts will be sent at your chosen times' : 'Disabled · No reminder pushes will be sent'}
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={notifEnabled}
+                  onChange={(e) => handleToggleMasterNotifications(e.target.checked)}
+                  disabled={notifLoading}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+              </label>
+            </div>
+
+            {/* Permission status callout if denied */}
+            {permissionState === 'denied' && (
+              <div className="alert-callout error" style={{ marginBottom: '1rem', fontSize: '0.75rem' }}>
+                <AlertTriangle size={15} />
+                <span>Notifications are blocked in your browser settings. Please allow notifications for this site to receive alerts.</span>
+              </div>
+            )}
+
+            {/* Prebuilt Time Options */}
+            <div style={{ marginBottom: '1rem', opacity: notifEnabled ? 1 : 0.6 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.4rem' }}>
+                Prebuilt Reminder Times (IST)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--rule)',
+                  background: selectedPrebuilts['09:00'] ? 'var(--gold-soft)' : 'var(--surface)',
+                  cursor: notifEnabled ? 'pointer' : 'default'
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem' }} className="mono">09:00 AM</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', marginLeft: '0.5rem' }}>Morning Check</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedPrebuilts['09:00']}
+                    disabled={!notifEnabled}
+                    onChange={(e) => setSelectedPrebuilts(prev => ({ ...prev, '09:00': e.target.checked }))}
+                  />
+                </label>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--rule)',
+                  background: selectedPrebuilts['12:00'] ? 'var(--gold-soft)' : 'var(--surface)',
+                  cursor: notifEnabled ? 'pointer' : 'default'
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem' }} className="mono">12:00 PM</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', marginLeft: '0.5rem' }}>Midday Check</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedPrebuilts['12:00']}
+                    disabled={!notifEnabled}
+                    onChange={(e) => setSelectedPrebuilts(prev => ({ ...prev, '12:00': e.target.checked }))}
+                  />
+                </label>
+
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--rule)',
+                  background: selectedPrebuilts['16:30'] ? 'var(--gold-soft)' : 'var(--surface)',
+                  cursor: notifEnabled ? 'pointer' : 'default'
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem' }} className="mono">04:30 PM</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', marginLeft: '0.5rem' }}>End of Day Register</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedPrebuilts['16:30']}
+                    disabled={!notifEnabled}
+                    onChange={(e) => setSelectedPrebuilts(prev => ({ ...prev, '16:30': e.target.checked }))}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Custom Times */}
+            <div style={{ marginBottom: '1.25rem', opacity: notifEnabled ? 1 : 0.6 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.4rem' }}>
+                Add Custom Reminder Time
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                <input
+                  type="time"
+                  className="form-control mono"
+                  value={newCustomTime}
+                  disabled={!notifEnabled}
+                  onChange={(e) => setNewCustomTime(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleAddCustomTime}
+                  disabled={!notifEnabled || !newCustomTime}
+                >
+                  <Plus size={14} /> Add
+                </button>
+              </div>
+
+              {customTimes.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {customTimes.map(ct => (
+                    <span
+                      key={ct}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.75rem',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: 'var(--radius-full)',
+                        background: 'var(--surface-alt)',
+                        border: '1px solid var(--rule)'
+                      }}
+                    >
+                      <Clock size={12} /> {ct}
+                      {notifEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCustomTime(ct)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 0 }}
+                        >
+                          <Trash2 size={12} color="var(--bad)" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={handleSaveReminders}
+                disabled={notifLoading}
+              >
+                {notifLoading ? 'Saving...' : 'Save Reminder Schedule'}
+              </button>
+            </div>
+
+            {/* Send Test Notification Button */}
+            <div style={{ borderTop: '1px solid var(--rule)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--ink)' }}>Test Notification</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)' }}>Verify push alerts work on this device</div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleSendTestNotification}
+                disabled={testNotifLoading}
+              >
+                <Send size={13} /> {testNotifLoading ? 'Sending...' : 'Send Test Alert'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: About */}
+        {activeTab === 'about' && (
           <div>
             <div style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', borderRadius: 'var(--radius-md)', padding: '1rem', marginBottom: '1rem', textAlign: 'center' }}>
-              <div className="brand-crest" style={{ margin: '0 auto 0.5rem', width: '42px', height: '42px', fontSize: '1.3rem' }}>
-                ₹
-              </div>
-              <h3 className="heading-ledger" style={{ fontSize: '1.25rem', color: 'var(--ink)' }}>ATT PER Y</h3>
+              <h4 className="heading-ledger" style={{ fontSize: '1.05rem', color: 'var(--ink)' }}>
+                CSE Attendance Register
+              </h4>
               <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                Version <span style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>1.0.0</span> (Academic Edition)
+                Version <span style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>1.1.0</span> (Reminders Edition)
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', marginTop: '0.5rem', lineHeight: 1.4 }}>
-                Personal multi-user attendance register, 75% threshold bunk calculator, and 7-day FAT forecast simulator.
+                Personal multi-user attendance register, 75% threshold bunk calculator, daily Web Push reminders, and 7-day FAT forecast simulator.
               </p>
             </div>
 

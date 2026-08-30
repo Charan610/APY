@@ -7,6 +7,8 @@ import DashboardTab from './components/DashboardTab';
 import TimetableTab from './components/TimetableTab';
 import ForecastTab from './components/ForecastTab';
 import SettingsModal from './components/SettingsModal';
+import NotificationPromptModal from './components/NotificationPromptModal';
+import { registerServiceWorker } from './notifications';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react';
 
 export default function App() {
@@ -19,13 +21,42 @@ export default function App() {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState('today');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (['today', 'dashboard', 'timetable', 'forecast'].includes(tabParam)) {
+        return tabParam;
+      }
+    } catch {}
+    return 'today';
+  });
   const [loading, setLoading] = useState(() => !getStoredUser());
   const [showSettings, setShowSettings] = useState(false);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
 
   useEffect(() => {
+    // 1. Initialize background service worker
+    registerServiceWorker();
+
+    // 2. Initialize user session & check notification prompt eligibility
     initSession();
   }, []);
+
+  const checkNotificationPromptEligibility = async () => {
+    try {
+      const dismissed = localStorage.getItem('apy_notif_prompt_dismissed');
+      if (dismissed) return;
+
+      const config = await api.getNotificationConfig();
+      if (!config.has_preferences) {
+        // First-time user without reminder configuration -> show prompt
+        setShowNotifPrompt(true);
+      }
+    } catch (e) {
+      // Quietly ignore if offline or network failure
+    }
+  };
 
   const initSession = async () => {
     try {
@@ -44,6 +75,7 @@ export default function App() {
             localStorage.setItem('apy_summary_cache', JSON.stringify(summaryData));
           } catch {}
         }
+        checkNotificationPromptEligibility();
       } else if (!getStoredUser()) {
         setUser(null);
         setAuthToken(null);
@@ -87,6 +119,7 @@ export default function App() {
   const handleAuthSuccess = (authenticatedUser) => {
     setUser(authenticatedUser);
     loadSummary();
+    checkNotificationPromptEligibility();
   };
 
   const handleLogout = () => {
@@ -95,6 +128,7 @@ export default function App() {
     setUser(null);
     setSummary(null);
     setActiveTab('today');
+    setShowNotifPrompt(false);
   };
 
   if (loading) {
@@ -193,6 +227,15 @@ export default function App() {
               {activeTab === 'forecast' && <div className="tab-indicator" />}
             </button>
           </nav>
+
+          {/* Post-Login One-Time Reminder Prompt */}
+          <NotificationPromptModal
+            isOpen={showNotifPrompt}
+            onClose={() => setShowNotifPrompt(false)}
+            onConfigUpdated={() => {
+              setShowNotifPrompt(false);
+            }}
+          />
 
           {/* Settings Modal */}
           <SettingsModal

@@ -6,3 +6,8 @@ bcrypt==4.0.1
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.9
 httpx>=0.27.0
+pywebpush>=1.14.0
+cryptography>=42.0.0
+pytz>=2024.1
+apscheduler>=3.10.4
+

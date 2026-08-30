@@ -69,5 +69,21 @@ export const api = {
   getForecast: (targetDate) => request(`/attendance/forecast?target_date=${targetDate}`),
 
   // Backup
-  triggerBackup: () => request('/admin/backup', { method: 'POST' })
+  triggerBackup: () => request('/admin/backup', { method: 'POST' }),
+
+  // Daily Reminder Notifications
+  getNotificationConfig: () => request('/notifications/config'),
+  updateNotificationPreferences: (payload) => request('/notifications/preferences', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }),
+  savePushSubscription: (payload) => request('/notifications/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }),
+  removePushSubscription: (payload) => request('/notifications/unsubscribe', {
+    method: 'POST',
+    body: JSON.stringify(payload || {})
+  }),
+  sendTestNotification: () => request('/notifications/test', { method: 'POST' })
 };

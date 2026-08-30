@@ -14,5 +14,11 @@ backend/__pycache__/
 .env
 
 # Backups and OS
+backend/backups/
+.vapid_keys.json
+.vapid_private.pem
+.vapid_public.txt
+*.pem
 .DS_Store
 Thumbs.db
+

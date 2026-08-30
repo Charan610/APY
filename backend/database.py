@@ -278,6 +278,49 @@ def init_db():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_date ON daily_logs(user_id, log_date);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_block ON daily_logs(user_id, block_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_block ON daily_logs(block_id);")
+
+            # Notification preferences table (Additive)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notif_pref_user ON notification_preferences(user_id);")
+
+            # Notification subscriptions table (Additive)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notification_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                endpoint TEXT UNIQUE NOT NULL,
+                keys_p256dh TEXT NOT NULL,
+                keys_auth TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notif_sub_user ON notification_subscriptions(user_id);")
+
+            # Notification times table (Additive)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notification_times (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                time_of_day TEXT NOT NULL,
+                label TEXT,
+                is_prebuilt BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, time_of_day),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notif_times_user ON notification_times(user_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notif_times_lookup ON notification_times(time_of_day);")
     except Exception as e:
         print("Init DB notice:", e)
 
