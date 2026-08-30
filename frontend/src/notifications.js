@@ -1,6 +1,9 @@
-// Helper utilities for Web Push & Notification permissions
+import { api } from './api';
 
 export function urlBase64ToUint8Array(base64String) {
+  if (!base64String || typeof base64String !== 'string') {
+    throw new Error('VAPID public key must be a valid base64 string.');
+  }
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/\-/g, '+')
@@ -45,20 +48,31 @@ export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) 
     throw new Error('Push notifications are not supported by your current browser.');
   }
 
-  // 1. Request browser notification permission
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    throw new Error(permission === 'denied' ? 'Notification permission was denied in browser settings.' : 'Notification permission was not granted.');
+  // 1. Resolve VAPID key if not provided
+  let keyToUse = vapidPublicKey;
+  if (!keyToUse) {
+    const config = await api.getNotificationConfig();
+    keyToUse = config?.vapid_public_key;
   }
 
-  // 2. Register / retrieve service worker registration
+  if (!keyToUse || typeof keyToUse !== 'string' || keyToUse.length < 20) {
+    throw new Error('Server VAPID public key could not be retrieved. Please check connection and try again.');
+  }
+
+  // 2. Request browser notification permission
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    throw new Error(permission === 'denied' ? 'Notification permission was denied in browser settings. Please allow notifications for this site.' : 'Notification permission was not granted.');
+  }
+
+  // 3. Register / retrieve service worker registration
   const registration = await registerServiceWorker();
   if (!registration) {
     throw new Error('Could not initialize service worker for push notifications.');
   }
 
-  // 3. Subscribe to push manager with VAPID key
-  const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+  // 4. Subscribe to push manager with VAPID key
+  const convertedKey = urlBase64ToUint8Array(keyToUse);
   let subscription = await registration.pushManager.getSubscription();
 
   if (!subscription) {
