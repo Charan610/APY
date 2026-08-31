@@ -54,9 +54,15 @@ export const nativeStorage = {
   async getApiUrl() {
     try {
       const { value } = await Preferences.get({ key: API_URL_KEY });
-      if (value) return value;
+      if (value && !value.includes('localhost') && !value.includes('127.0.0.1')) {
+        return value;
+      }
     } catch (e) {}
-    return localStorage.getItem(API_URL_KEY) || import.meta.env.VITE_API_URL || 'https://apy-navy.vercel.app/api';
+    const local = localStorage.getItem(API_URL_KEY);
+    if (local && !local.includes('localhost') && !local.includes('127.0.0.1')) {
+      return local;
+    }
+    return import.meta.env.VITE_API_URL || 'https://apy-mu.vercel.app/api';
   },
 
   async setApiUrl(url) {

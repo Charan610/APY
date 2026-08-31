@@ -1,7 +1,7 @@
 import { nativeStorage } from './nativeStorage';
 import { Capacitor } from '@capacitor/core';
 
-let cachedApiUrl = localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+let cachedApiUrl = localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || 'https://apy-mu.vercel.app/api';
 
 export function getClientPlatform() {
   try {
@@ -13,7 +13,11 @@ export function getClientPlatform() {
 }
 
 export function getApiBase() {
-  return localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || cachedApiUrl;
+  const local = localStorage.getItem('attendance_api_url');
+  if (local && !local.includes('localhost') && !local.includes('127.0.0.1')) {
+    return local;
+  }
+  return import.meta.env.VITE_API_URL || 'https://apy-mu.vercel.app/api';
 }
 
 export function setApiBase(url) {
