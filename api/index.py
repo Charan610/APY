@@ -9,3 +9,9 @@ for p in [CURRENT_DIR, os.path.join(CURRENT_DIR, "_backend"), os.path.join(ROOT_
         sys.path.insert(0, p)
 
 from main import app
+
+try:
+    from mangum import Mangum
+    handler = Mangum(app, lifespan="off")
+except Exception:
+    handler = app
