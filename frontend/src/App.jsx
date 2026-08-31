@@ -10,7 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import NotificationPromptModal from './components/NotificationPromptModal';
 import AdminModal from './components/AdminModal';
 import { registerServiceWorker } from './notifications';
-import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck } from 'lucide-react';
+import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
@@ -196,7 +196,9 @@ export default function App() {
     return (
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-          <div className="brand-crest" style={{ animation: 'spin 2s linear infinite' }}>₹</div>
+          <div className="brand-crest" style={{ animation: 'pulse 1.5s ease-in-out infinite', width: '48px', height: '48px' }}>
+            <GraduationCap size={26} className="brand-icon-glyph" />
+          </div>
           <div className="font-serif" style={{ fontSize: '1rem', fontWeight: 600 }}>Loading ATT PER Y...</div>
         </div>
       </div>

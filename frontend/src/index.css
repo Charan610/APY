@@ -93,15 +93,24 @@ h1, h2, h3, h4, .heading-ledger {
 .brand-crest {
   width: 38px;
   height: 38px;
-  border-radius: var(--radius-sm);
-  background: var(--ink);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--ink) 0%, #342866 100%);
   color: var(--accent-gold);
+  border: 1px solid rgba(227, 168, 59, 0.35);
+  box-shadow: 0 2px 8px rgba(36, 27, 78, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-serif);
-  font-weight: 800;
-  font-size: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.brand-crest:hover {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 4px 14px rgba(227, 168, 59, 0.35);
+}
+
+.brand-icon-glyph {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 .brand-heading {

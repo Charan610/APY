@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, setAuthToken, setStoredUser } from '../api';
 import TimetableBuilder from './TimetableBuilder';
-import { User, Lock, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { User, Lock, BookOpen, AlertCircle, CheckCircle2, GraduationCap } from 'lucide-react';
 
 export default function AuthModal({ onAuthSuccess }) {
   const DEFAULT_SECTIONS = [
@@ -140,8 +140,8 @@ export default function AuthModal({ onAuthSuccess }) {
       <div className="modal-dialog" style={{ maxWidth: isCustomSection && mode === 'register' ? '640px' : '440px' }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-          <div className="brand-crest" style={{ margin: '0 auto 0.75rem', width: '48px', height: '48px', fontSize: '1.5rem' }}>
-            <span>₹</span>
+          <div className="brand-crest" style={{ margin: '0 auto 0.75rem', width: '52px', height: '52px' }}>
+            <GraduationCap size={28} className="brand-icon-glyph" />
           </div>
           <h2 className="heading-ledger" style={{ fontSize: '1.35rem' }}>ATT PER Y</h2>
           <p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>

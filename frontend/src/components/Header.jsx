@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell, ShieldCheck } from 'lucide-react';
+import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell, ShieldCheck, GraduationCap } from 'lucide-react';
 
 export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onOpenReminders, onOpenAdmin, onLogout }) {
   const isAdmin = Boolean(
@@ -10,7 +10,9 @@ export default function Header({ user, activeTab, onSelectTab, onOpenSettings, o
   return (
     <header className="ledger-header">
       <div className="brand-section">
-        <div className="brand-crest">₹</div>
+        <div className="brand-crest" title="ATT PER Y">
+          <GraduationCap size={22} className="brand-icon-glyph" />
+        </div>
         <div>
           <div className="brand-heading font-serif">ATT PER Y</div>
           <div className="brand-subline">
