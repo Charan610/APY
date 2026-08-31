@@ -68,15 +68,27 @@ export default function App() {
         const matchingTime = config.active_times.find(t => t.time_of_day === currentTimeStr);
         if (matchingTime) {
           firedMinutes.add(currentTimeStr);
-          if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('Attendance Tracker ⏰', {
+          try {
+            if ('serviceWorker' in navigator) {
+              const reg = await navigator.serviceWorker.ready;
+              reg.showNotification('Attendance Tracker ⏰', {
+                body: 'Did you attend your classes today? Tap to record your attendance.',
+                icon: '/favicon.svg',
+                badge: '/favicon.svg',
+                tag: `attendance-reminder-${currentTimeStr}`,
+                renotify: true,
+                data: { url: '/?tab=today' }
+              });
+            } else {
+              new Notification('Attendance Tracker ⏰', {
+                body: 'Did you attend your classes today? Tap to record your attendance.',
+                icon: '/favicon.svg'
+              });
+            }
+          } catch (notifErr) {
+            new Notification('Attendance Tracker ⏰', {
               body: 'Did you attend your classes today? Tap to record your attendance.',
-              icon: '/favicon.svg',
-              badge: '/favicon.svg',
-              tag: `attendance-reminder-${currentTimeStr}`,
-              renotify: true,
-              data: { url: '/?tab=today' }
+              icon: '/favicon.svg'
             });
           }
         }
@@ -85,7 +97,8 @@ export default function App() {
       }
     };
 
-    const interval = setInterval(checkReminders, 30000);
+    checkReminders();
+    const interval = setInterval(checkReminders, 10000);
     return () => clearInterval(interval);
   }, [user]);
 

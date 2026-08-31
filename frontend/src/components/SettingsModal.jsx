@@ -265,19 +265,69 @@ function formatTime12h(timeStr) {
   return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-  const handleAddCustomTime = () => {
+  const handleAddCustomTime = async () => {
     if (!newCustomTime) return;
     if (customTimes.includes(newCustomTime)) {
       setError(`Time ${formatTime12h(newCustomTime)} is already in your list.`);
       return;
     }
-    setCustomTimes(prev => [...prev, newCustomTime].sort());
+    const updatedCustomTimes = [...customTimes, newCustomTime].sort();
+    setCustomTimes(updatedCustomTimes);
+    const addedTimeStr = newCustomTime;
     setNewCustomTime('');
-    setMsg(`Added ${formatTime12h(newCustomTime)}! Click "Save Reminder Schedule" below to save changes.`);
+
+    try {
+      const timesToSave = [];
+      if (selectedPrebuilts['09:00']) {
+        timesToSave.push({ time_of_day: '09:00', label: 'Morning Check', is_prebuilt: true });
+      }
+      if (selectedPrebuilts['12:00']) {
+        timesToSave.push({ time_of_day: '12:00', label: 'Midday Check', is_prebuilt: true });
+      }
+      if (selectedPrebuilts['16:30']) {
+        timesToSave.push({ time_of_day: '16:30', label: 'End of Day Register', is_prebuilt: true });
+      }
+      for (const ct of updatedCustomTimes) {
+        timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
+      }
+
+      await api.updateNotificationPreferences({
+        enabled: notifEnabled,
+        times: timesToSave
+      });
+      setMsg(`Added and saved ${formatTime12h(addedTimeStr)} to your reminder schedule!`);
+    } catch (err) {
+      setError('Could not auto-save new time: ' + (err.message || ''));
+    }
   };
 
-  const handleRemoveCustomTime = (timeToRemove) => {
-    setCustomTimes(prev => prev.filter(t => t !== timeToRemove));
+  const handleRemoveCustomTime = async (timeToRemove) => {
+    const updatedCustomTimes = customTimes.filter(t => t !== timeToRemove);
+    setCustomTimes(updatedCustomTimes);
+
+    try {
+      const timesToSave = [];
+      if (selectedPrebuilts['09:00']) {
+        timesToSave.push({ time_of_day: '09:00', label: 'Morning Check', is_prebuilt: true });
+      }
+      if (selectedPrebuilts['12:00']) {
+        timesToSave.push({ time_of_day: '12:00', label: 'Midday Check', is_prebuilt: true });
+      }
+      if (selectedPrebuilts['16:30']) {
+        timesToSave.push({ time_of_day: '16:30', label: 'End of Day Register', is_prebuilt: true });
+      }
+      for (const ct of updatedCustomTimes) {
+        timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
+      }
+
+      await api.updateNotificationPreferences({
+        enabled: notifEnabled,
+        times: timesToSave
+      });
+      setMsg(`Removed ${formatTime12h(timeToRemove)} from reminder schedule.`);
+    } catch (err) {
+      setError('Could not update reminder schedule: ' + (err.message || ''));
+    }
   };
 
   const handleSendTestNotification = async () => {
