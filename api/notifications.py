@@ -112,20 +112,22 @@ def send_push_notification(subscription: Dict[str, Any], payload: Dict[str, Any]
 
 def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[str, Any]:
     """
-    Finds all users whose reminder time matches current IST time and sends them reminders.
+    Finds all users whose reminder time is due (<= current IST time) and has not yet been sent today,
+    then dispatches the Web Push notification and records today's date in last_sent_date.
     """
     from database import get_db
     ist = pytz.timezone("Asia/Kolkata")
     now_ist = datetime.now(ist)
+    current_time_str = now_ist.strftime("%H:%M")
+    today_date_str = now_ist.strftime("%Y-%m-%d")
     
-    if not target_time_str:
-        target_time_str = now_ist.strftime("%H:%M")
-        
-    logger.info(f"Checking attendance reminders for IST time: {target_time_str}")
+    check_time_str = target_time_str if target_time_str else current_time_str
+    logger.info(f"[Scheduler Heartbeat] Checking attendance reminders for IST time: {check_time_str} (Date: {today_date_str})")
 
     results = {
-        "time": target_time_str,
-        "matched_users": 0,
+        "ist_time": check_time_str,
+        "date": today_date_str,
+        "matched_reminders": 0,
         "notifications_sent": 0,
         "failed": 0
     }
@@ -140,22 +142,40 @@ def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[
     try:
         with get_db() as db:
             cursor = db.cursor()
-            cursor.execute("""
-                SELECT DISTINCT u.id as user_id, u.register_number, nt.time_of_day, nt.label
-                FROM notification_times nt
-                JOIN notification_preferences np ON nt.user_id = np.user_id
-                JOIN users u ON nt.user_id = u.id
-                WHERE np.enabled = 1 AND nt.time_of_day = ?
-            """, (target_time_str,))
-            users = cursor.fetchall()
-            results["matched_users"] = len(users)
+            
+            if target_time_str:
+                cursor.execute("""
+                    SELECT nt.id as time_id, nt.user_id, u.register_number, nt.time_of_day, nt.label
+                    FROM notification_times nt
+                    JOIN notification_preferences np ON nt.user_id = np.user_id
+                    JOIN users u ON nt.user_id = u.id
+                    WHERE np.enabled = 1 
+                      AND nt.time_of_day = ?
+                      AND (nt.last_sent_date IS NULL OR nt.last_sent_date != ?)
+                """, (target_time_str, today_date_str))
+            else:
+                cursor.execute("""
+                    SELECT nt.id as time_id, nt.user_id, u.register_number, nt.time_of_day, nt.label
+                    FROM notification_times nt
+                    JOIN notification_preferences np ON nt.user_id = np.user_id
+                    JOIN users u ON nt.user_id = u.id
+                    WHERE np.enabled = 1 
+                      AND nt.time_of_day <= ?
+                      AND (nt.last_sent_date IS NULL OR nt.last_sent_date != ?)
+                """, (current_time_str, today_date_str))
 
-            for user in users:
+            reminders = cursor.fetchall()
+            results["matched_reminders"] = len(reminders)
+
+            for item in reminders:
+                time_id = item["time_id"]
+                user_id = item["user_id"]
+
                 cursor.execute("""
                     SELECT id, user_id, endpoint, keys_p256dh, keys_auth
                     FROM notification_subscriptions
                     WHERE user_id = ?
-                """, (user["user_id"],))
+                """, (user_id,))
                 subs = cursor.fetchall()
 
                 for sub in subs:
@@ -165,8 +185,15 @@ def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[
                     else:
                         results["failed"] += 1
 
+                # Mark last_sent_date to prevent duplicate deliveries today
+                cursor.execute(
+                    "UPDATE notification_times SET last_sent_date = ? WHERE id = ?",
+                    (today_date_str, time_id)
+                )
+
+        logger.info(f"[Scheduler Heartbeat Result] Matched: {results['matched_reminders']}, Sent: {results['notifications_sent']}, Failed: {results['failed']}")
     except Exception as e:
-        logger.error(f"Error during reminder dispatch: {e}")
+        logger.error(f"[Scheduler Error] Error during reminder dispatch: {e}")
         results["error"] = str(e)
 
     return results

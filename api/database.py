@@ -391,6 +391,7 @@ def init_db():
                 time_of_day TEXT NOT NULL,
                 label TEXT,
                 is_prebuilt BOOLEAN DEFAULT 0,
+                last_sent_date TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, time_of_day),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -398,6 +399,12 @@ def init_db():
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_notif_times_user ON notification_times(user_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_notif_times_lookup ON notification_times(time_of_day);")
+            
+            # Safe non-destructive column migration for existing tables
+            try:
+                cursor.execute("ALTER TABLE notification_times ADD COLUMN last_sent_date TEXT;")
+            except Exception:
+                pass
     except Exception as e:
         print("Init DB notice:", e)
 
