@@ -81,6 +81,8 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
     }
   };
 
+  const [customPinInput, setCustomPinInput] = useState('');
+
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     if (!searchQuery || searchQuery.trim().length < 2) {
@@ -98,10 +100,14 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
 
     try {
       const res = await api.searchStudent(searchQuery);
-      if (res.matches && res.matches.length > 0) {
+      if (res.exact_match) {
+        setStudent(res.exact_match);
+        setMatches(res.matches || [res.exact_match]);
+      } else if (res.matches && res.matches.length > 0) {
         setMatches(res.matches);
-      } else if (res.student) {
-        setStudent(res.student);
+        if (res.matches.length === 1) {
+          setStudent(res.matches[0]);
+        }
       } else {
         setError(`No student found matching "${searchQuery.trim().toUpperCase()}".`);
       }
@@ -112,7 +118,7 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
     }
   };
 
-  const handleSelectStudent = (stu) => {
+  const handleSelectMatch = (stu) => {
     setStudent(stu);
     setConfirmingTarget(null);
     setNewGeneratedPin(null);
@@ -120,18 +126,18 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
     setMsg('');
   };
 
-  const handleInitiateReset = (targetReg) => {
-    setConfirmingTarget(targetReg);
-    setError('');
-    setMsg('');
-  };
-
-  const handleConfirmReset = async (targetReg) => {
+  const handleTriggerReset = async () => {
+    if (!confirmingTarget) return;
     setResetting(true);
     setError('');
     setMsg('');
     try {
-      const res = await api.resetStudentPin(targetReg);
+      if (customPinInput && !/^\d{4,6}$/.test(customPinInput.trim())) {
+        setError('Custom PIN must be 4 to 6 numeric digits.');
+        setResetting(false);
+        return;
+      }
+      const res = await api.resetStudentPin(confirmingTarget.register_number, customPinInput.trim() || null);
       setNewGeneratedPin({
         pin: res.new_pin,
         register_number: res.target_register_number,
@@ -139,7 +145,8 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
         section_label: res.section_label
       });
       setConfirmingTarget(null);
-      setMsg(`PIN successfully reset for ${res.target_register_number}!`);
+      setCustomPinInput('');
+      setMsg(`PIN successfully set for ${res.target_register_number}!`);
     } catch (err) {
       setError(err.message || 'Failed to reset student PIN');
     } finally {
@@ -551,25 +558,50 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
             {/* Confirmation Alert Box */}
             {confirmingTarget && (
               <div style={{
-                background: 'var(--danger-bg, rgba(220, 38, 38, 0.08))',
-                border: '1px solid var(--danger, #dc2626)',
+                background: 'var(--surface-alt)',
+                border: '1.5px solid var(--accent-gold, #d97706)',
                 borderRadius: 'var(--radius-md)',
                 padding: '1rem',
                 marginBottom: '1.25rem'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger, #dc2626)', fontWeight: 700, marginBottom: '0.4rem' }}>
-                  <AlertTriangle size={18} />
-                  <span>Confirm PIN Reset</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-gold, #d97706)', fontWeight: 700, marginBottom: '0.4rem' }}>
+                  <KeyRound size={18} />
+                  <span>Set or Reset PIN for {confirmingTarget.register_number}</span>
                 </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--ink)', margin: '0 0 0.85rem 0', lineHeight: 1.4 }}>
-                  Are you sure you want to reset the PIN for <strong>{confirmingTarget.register_number}</strong>?
-                  Their current PIN will be immediately invalidated and replaced with a temporary 6-digit PIN.
+                <p style={{ fontSize: '0.82rem', color: 'var(--ink-soft)', margin: '0 0 0.75rem 0', lineHeight: 1.4 }}>
+                  You can specify a custom 4-6 digit numeric PIN below, or leave it blank to automatically generate a secure random 6-digit PIN.
                 </p>
+
+                <div style={{ marginBottom: '0.85rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--ink)' }}>
+                    Manual Custom PIN (Optional)
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={customPinInput}
+                    onChange={(e) => setCustomPinInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Leave blank for random 6-digit PIN (e.g. 1234)"
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 0.65rem',
+                      fontFamily: 'monospace',
+                      letterSpacing: '2px',
+                      fontSize: '0.95rem',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--rule)',
+                      background: 'var(--surface)'
+                    }}
+                  />
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => setConfirmingTarget(null)}
+                    onClick={() => { setConfirmingTarget(null); setCustomPinInput(''); }}
                     disabled={resetting}
                   >
                     Cancel
@@ -580,15 +612,16 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
                     onClick={handleTriggerReset}
                     disabled={resetting}
                     style={{
-                      background: 'var(--danger, #dc2626)',
-                      borderColor: 'var(--danger, #dc2626)',
+                      background: 'var(--accent-gold, #d97706)',
+                      borderColor: 'var(--accent-gold, #d97706)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.35rem'
+                      gap: '0.35rem',
+                      fontWeight: 700
                     }}
                   >
                     {resetting ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <KeyRound size={14} />}
-                    <span>Confirm & Generate New PIN</span>
+                    <span>{customPinInput ? `Set PIN to ${customPinInput}` : 'Generate Random PIN'}</span>
                   </button>
                 </div>
               </div>

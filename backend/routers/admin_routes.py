@@ -8,11 +8,22 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 class ResetPinRequest(BaseModel):
     target_register_number: str = Field(..., min_length=3, max_length=20)
+    custom_pin: Optional[str] = None
 
     @field_validator("target_register_number")
     @classmethod
     def validate_reg_no(cls, v: str):
         return v.strip().upper()
+
+    @field_validator("custom_pin")
+    @classmethod
+    def validate_custom_pin(cls, v: Optional[str]):
+        if v is not None and v.strip():
+            clean = v.strip()
+            if not clean.isdigit() or len(clean) < 4 or len(clean) > 6:
+                raise ValueError("Custom PIN must be 4 to 6 numeric digits.")
+            return clean
+        return None
 
 @router.get("/search")
 def search_student(
@@ -132,8 +143,11 @@ def reset_student_pin(
                 detail=f"Student with register number {target_reg} was not found"
             )
 
-        # Generate secure random 6-digit PIN
-        new_pin = f"{secrets.randbelow(1000000):06d}"
+        # Generate secure PIN or use custom PIN
+        if req.custom_pin:
+            new_pin = req.custom_pin
+        else:
+            new_pin = f"{secrets.randbelow(1000000):06d}"
         new_pin_hash = hash_pin(new_pin)
 
         # Overwrite only the pin_hash column
@@ -158,7 +172,7 @@ def reset_student_pin(
             "branch": student["branch"],
             "section_label": student["section_label"],
             "new_pin": new_pin,
-            "message": f"Temporary PIN generated for {target_reg}. Relay this PIN securely to the student."
+            "message": f"PIN successfully set for {target_reg}. Relay this PIN securely to the student."
         }
 
 @router.get("/reset-logs")

@@ -215,13 +215,17 @@ def get_admin_register_numbers() -> set:
     raw = os.environ.get("ADMIN_REGISTER_NUMBERS", "25B91A05D8,23B91A05C0")
     return {r.strip().upper() for r in raw.split(",") if r.strip()}
 
-def is_admin_user(register_number: Optional[str]) -> bool:
+def is_admin_user(register_number: Optional[str], is_admin: Optional[bool] = False) -> bool:
+    if is_admin:
+        return True
     if not register_number:
         return False
     return register_number.strip().upper() in get_admin_register_numbers()
 
 def get_current_admin_user(current_user: dict = Depends(get_current_user)) -> dict:
-    if not is_admin_user(current_user.get("register_number")):
+    reg = current_user.get("register_number")
+    is_adm = bool(current_user.get("is_admin"))
+    if not is_admin_user(reg, is_adm):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Forbidden: Admin privileges required."

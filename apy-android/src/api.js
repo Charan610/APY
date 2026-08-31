@@ -109,9 +109,9 @@ export const api = {
   // Admin
   triggerBackup: () => request('/admin/backup', { method: 'POST' }),
   searchStudent: (regNo) => request(`/admin/search?register_number=${encodeURIComponent(regNo)}`),
-  resetStudentPin: (regNo) => request('/admin/reset-pin', {
+  resetStudentPin: (regNo, customPin = null) => request('/admin/reset-pin', {
     method: 'POST',
-    body: JSON.stringify({ target_register_number: regNo })
+    body: JSON.stringify({ target_register_number: regNo, custom_pin: customPin || null })
   }),
   getAdminResetLogs: (limit = 25) => request(`/admin/reset-logs?limit=${limit}`),
   getPlatformStats: () => request('/admin/platform-stats'),
