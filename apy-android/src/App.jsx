@@ -165,6 +165,15 @@ export default function App() {
     }
   };
 
+  const checkAndPromptNotifications = async () => {
+    try {
+      const dismissed = localStorage.getItem('apy_notif_prompt_dismissed');
+      if (!dismissed) {
+        setShowNotifPrompt(true);
+      }
+    } catch (e) {}
+  };
+
   const handleAuthSuccess = (authenticatedUser) => {
     const u = {
       ...authenticatedUser,
@@ -176,6 +185,9 @@ export default function App() {
     setUser(u);
     setStoredUser(u);
     loadSummary();
+    setTimeout(() => {
+      checkAndPromptNotifications();
+    }, 800);
   };
 
   const handleLogout = async () => {

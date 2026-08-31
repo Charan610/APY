@@ -34,6 +34,16 @@ export async function registerServiceWorker() {
   }
 }
 
+export function isNative() {
+  return false;
+}
+
+export async function scheduleNativeReminders() {}
+
+export async function sendNativeTestNotification() {
+  return api.sendTestNotification();
+}
+
 export function isPushSupported() {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }

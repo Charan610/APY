@@ -1,5 +1,18 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+export function getApiBase() {
+  return localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || '/api';
+}
+
+export function setApiBase(url) {
+  if (url) {
+    let clean = url.trim();
+    if (clean.endsWith('/')) clean = clean.slice(0, -1);
+    if (!clean.endsWith('/api') && !clean.includes('/api/')) clean = `${clean}/api`;
+    localStorage.setItem('attendance_api_url', clean);
+  }
+}
+
 export function getAuthToken() {
   return localStorage.getItem('attendance_jwt_token');
 }
@@ -81,6 +94,10 @@ export const api = {
 
   // Daily Reminder Notifications
   getNotificationConfig: () => request('/notifications/config'),
+  saveNotificationConfig: (payload) => request('/notifications/preferences', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }),
   updateNotificationPreferences: (payload) => request('/notifications/preferences', {
     method: 'POST',
     body: JSON.stringify(payload)

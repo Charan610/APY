@@ -117,6 +117,10 @@ export const api = {
 
   // Daily Reminder Notifications
   getNotificationConfig: () => request('/notifications/config'),
+  saveNotificationConfig: (payload) => request('/notifications/preferences', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }),
   updateNotificationPreferences: (payload) => request('/notifications/preferences', {
     method: 'POST',
     body: JSON.stringify(payload)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { requestNotificationPermissionAndSubscribe, isPushSupported } from '../notifications';
+import { requestNotificationPermissionAndSubscribe, isPushSupported, isNative, scheduleNativeReminders } from '../notifications';
 import { Bell, Clock, Check, X, Sparkles, Plus, Trash2, AlertCircle } from 'lucide-react';
 
 export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdated }) {
@@ -44,6 +44,12 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
     setError('');
     setLoading(true);
     try {
+      if (isNative()) {
+        await requestNotificationPermissionAndSubscribe();
+        setStep('times');
+        return;
+      }
+
       if (!isPushSupported()) {
         throw new Error('Push notifications are not supported on this browser.');
       }
@@ -113,10 +119,14 @@ function formatTime12h(timeStr) {
         timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
       }
 
-      await api.updateNotificationPreferences({
+      await api.saveNotificationConfig({
         enabled: true,
         times: timesToSave
       });
+
+      if (isNative()) {
+        await scheduleNativeReminders(timesToSave);
+      }
 
       try {
         localStorage.setItem('apy_notif_prompt_dismissed', 'true');
