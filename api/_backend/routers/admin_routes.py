@@ -181,3 +181,74 @@ def get_reset_logs(
         return {
             "logs": [dict(r) for r in rows] if rows else []
         }
+
+@router.get("/platform-stats")
+def get_platform_stats(admin_user: dict = Depends(get_current_admin_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # 1. Total sessions by platform
+        cursor.execute("SELECT platform, COUNT(*) FROM login_sessions GROUP BY platform")
+        sessions_by_platform = {r[0]: r[1] for r in cursor.fetchall()}
+        
+        # 2. Unique users by platform
+        cursor.execute("SELECT platform, COUNT(DISTINCT user_id) FROM login_sessions GROUP BY platform")
+        unique_by_platform = {r[0]: r[1] for r in cursor.fetchall()}
+        
+        # 3. Android only users
+        cursor.execute("""
+            SELECT u.register_number, MAX(s.last_seen_at) as last_seen
+            FROM users u
+            JOIN login_sessions s ON u.id = s.user_id
+            WHERE s.platform = 'android'
+            AND u.id NOT IN (
+                SELECT user_id FROM login_sessions WHERE platform = 'web'
+            )
+            GROUP BY u.id
+            ORDER BY last_seen DESC
+        """)
+        android_only = [dict(r) for r in cursor.fetchall()]
+        
+        # 4. Web only users
+        cursor.execute("""
+            SELECT u.register_number, MAX(s.last_seen_at) as last_seen
+            FROM users u
+            JOIN login_sessions s ON u.id = s.user_id
+            WHERE s.platform = 'web'
+            AND u.id NOT IN (
+                SELECT user_id FROM login_sessions WHERE platform = 'android'
+            )
+            GROUP BY u.id
+            ORDER BY last_seen DESC
+        """)
+        web_only = [dict(r) for r in cursor.fetchall()]
+        
+        # 5. Dual users (both Web and Android)
+        cursor.execute("""
+            SELECT u.register_number, MAX(s.last_seen_at) as last_seen
+            FROM users u
+            WHERE u.id IN (SELECT user_id FROM login_sessions WHERE platform = 'android')
+            AND u.id IN (SELECT user_id FROM login_sessions WHERE platform = 'web')
+            GROUP BY u.id
+            ORDER BY last_seen DESC
+        """)
+        dual_users = [dict(r) for r in cursor.fetchall()]
+        
+        return {
+            "sessions": {
+                "android": sessions_by_platform.get("android", 0),
+                "web": sessions_by_platform.get("web", 0),
+                "ios": sessions_by_platform.get("ios", 0),
+                "total": sum(sessions_by_platform.values())
+            },
+            "unique_users": {
+                "android": unique_by_platform.get("android", 0),
+                "web": unique_by_platform.get("web", 0),
+                "android_only_count": len(android_only),
+                "web_only_count": len(web_only),
+                "dual_count": len(dual_users)
+            },
+            "android_only_students": android_only,
+            "web_only_students": web_only,
+            "dual_students": dual_users
+        }

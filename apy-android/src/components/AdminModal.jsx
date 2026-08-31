@@ -31,6 +31,8 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [platformStats, setPlatformStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -60,63 +62,76 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
       setCopied(false);
       if (activeTab === 'logs') {
         loadLogs();
+      } else if (activeTab === 'analytics') {
+        loadStats();
       }
     }
-  }, [isOpen]);
+  }, [isOpen, activeTab]);
+
+  const loadStats = async () => {
+    setStatsLoading(true);
+    setError('');
+    try {
+      const res = await api.getPlatformStats();
+      setPlatformStats(res);
+    } catch (err) {
+      setError(err.message || 'Failed to load platform stats');
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    const query = searchQuery.trim().toUpperCase();
-    if (!query) return;
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setError('Please enter at least 2 characters to search.');
+      return;
+    }
 
+    setSearching(true);
     setError('');
     setMsg('');
-    setSearching(true);
-    setNewGeneratedPin(null);
+    setStudent(null);
+    setMatches([]);
     setConfirmingTarget(null);
+    setNewGeneratedPin(null);
 
     try {
-      const res = await api.searchStudent(query);
-      if (res.exact_match) {
-        setStudent(res.exact_match);
-        setMatches([]);
-      } else if (res.matches && res.matches.length > 0) {
-        if (res.matches.length === 1) {
-          setStudent(res.matches[0]);
-          setMatches([]);
-        } else {
-          setStudent(null);
-          setMatches(res.matches);
-        }
+      const res = await api.searchStudent(searchQuery);
+      if (res.matches && res.matches.length > 0) {
+        setMatches(res.matches);
+      } else if (res.student) {
+        setStudent(res.student);
       } else {
-        setStudent(null);
-        setMatches([]);
-        setError(`No student found matching "${query}". Verify the register number.`);
+        setError(`No student found matching "${searchQuery.trim().toUpperCase()}".`);
       }
     } catch (err) {
-      setError(err.message || 'Error searching student');
-      setStudent(null);
-      setMatches([]);
+      setError(err.message || 'Error searching student register');
     } finally {
       setSearching(false);
     }
   };
 
-  const handleSelectMatch = (m) => {
-    setStudent(m);
-    setMatches([]);
-    setSearchQuery(m.register_number);
+  const handleSelectStudent = (stu) => {
+    setStudent(stu);
+    setConfirmingTarget(null);
+    setNewGeneratedPin(null);
     setError('');
     setMsg('');
   };
 
-  const handleTriggerReset = async () => {
-    if (!confirmingTarget) return;
+  const handleInitiateReset = (targetReg) => {
+    setConfirmingTarget(targetReg);
+    setError('');
+    setMsg('');
+  };
+
+  const handleConfirmReset = async (targetReg) => {
     setResetting(true);
     setError('');
     setMsg('');
     try {
-      const res = await api.resetStudentPin(confirmingTarget.register_number);
+      const res = await api.resetStudentPin(targetReg);
       setNewGeneratedPin({
         pin: res.new_pin,
         register_number: res.target_register_number,
@@ -198,15 +213,17 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
               color: 'var(--accent-gold, #d97706)',
               padding: '6px',
               borderRadius: 'var(--radius-md)',
-              display: 'flex'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}>
-              <ShieldCheck size={20} />
+              <ShieldCheck size={22} />
             </div>
             <div>
-              <h3 className="heading-ledger" style={{ fontSize: '1.2rem', margin: 0 }}>
-                Admin PIN Reset Panel
+              <h3 className="heading-ledger" style={{ fontSize: '1.15rem', margin: 0 }}>
+                Administrator Center
               </h3>
-              <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
                 Admin: <strong>{currentUser?.register_number}</strong> · Authorized Control
               </div>
             </div>
@@ -246,21 +263,40 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
             style={{
               flex: 1,
               padding: '0.45rem',
-              fontSize: '0.82rem',
+              fontSize: '0.78rem',
               fontWeight: activeTab === 'reset' ? 700 : 500
             }}
             onClick={() => { setActiveTab('reset'); setError(''); setMsg(''); }}
           >
-            <KeyRound size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
+            <KeyRound size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
             PIN Reset
+          </button>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'analytics' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              flex: 1.2,
+              padding: '0.45rem',
+              fontSize: '0.78rem',
+              fontWeight: activeTab === 'analytics' ? 700 : 500
+            }}
+            onClick={() => {
+              setActiveTab('analytics');
+              setError('');
+              setMsg('');
+              loadStats();
+            }}
+          >
+            <Layers size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            📱 App vs Web
           </button>
           <button
             type="button"
             className={`btn ${activeTab === 'logs' ? 'btn-primary' : 'btn-secondary'}`}
             style={{
-              flex: 1,
+              flex: 0.9,
               padding: '0.45rem',
-              fontSize: '0.82rem',
+              fontSize: '0.78rem',
               fontWeight: activeTab === 'logs' ? 700 : 500
             }}
             onClick={() => {
@@ -270,8 +306,8 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
               loadLogs();
             }}
           >
-            <Clock size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} />
-            Audit History
+            <Clock size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            Audit Logs
           </button>
         </div>
 
@@ -636,6 +672,165 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
                     Done
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: Platform Analytics */}
+        {activeTab === 'analytics' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink)' }}>
+                Web vs Android App Adoption
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={loadStats}
+                disabled={statsLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+              >
+                <RefreshCw size={12} style={statsLoading ? { animation: 'spin 1s linear infinite' } : {}} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {statsLoading ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
+                Loading adoption statistics...
+              </div>
+            ) : platformStats ? (
+              <div>
+                {/* Metric Summary Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem', marginBottom: '1rem' }}>
+                  <div style={{
+                    background: 'var(--surface-alt)',
+                    border: '1px solid var(--rule)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', textTransform: 'uppercase', fontWeight: 600 }}>
+                      📱 Android Only
+                    </div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--accent-gold, #d97706)', marginTop: '0.2rem' }}>
+                      {platformStats.unique_users?.android_only_count || 0}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--ink-soft)' }}>
+                      exclusive app users
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: 'var(--surface-alt)',
+                    border: '1px solid var(--rule)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', textTransform: 'uppercase', fontWeight: 600 }}>
+                      🔄 Dual Platform
+                    </div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--good, #16a34a)', marginTop: '0.2rem' }}>
+                      {platformStats.unique_users?.dual_count || 0}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--ink-soft)' }}>
+                      both app + web
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: 'var(--surface-alt)',
+                    border: '1px solid var(--rule)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.75rem',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', textTransform: 'uppercase', fontWeight: 600 }}>
+                      🌐 Web Only
+                    </div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ink)', marginTop: '0.2rem' }}>
+                      {platformStats.unique_users?.web_only_count || 0}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--ink-soft)' }}>
+                      browser only
+                    </div>
+                  </div>
+                </div>
+
+                {/* Session Breakdown */}
+                <div style={{
+                  background: 'var(--surface-alt)',
+                  border: '1px solid var(--rule)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.75rem 0.9rem',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  justifyContent: 'space-around',
+                  fontSize: '0.8rem'
+                }}>
+                  <div>
+                    📱 <strong>{platformStats.sessions?.android || 0}</strong> Android logins
+                  </div>
+                  <div style={{ borderLeft: '1px solid var(--rule)', paddingLeft: '0.75rem' }}>
+                    🌐 <strong>{platformStats.sessions?.web || 0}</strong> Web logins
+                  </div>
+                  <div style={{ borderLeft: '1px solid var(--rule)', paddingLeft: '0.75rem' }}>
+                    📊 <strong>{platformStats.sessions?.total || 0}</strong> Total sessions
+                  </div>
+                </div>
+
+                {/* Detailed Lists */}
+                {platformStats.android_only_students?.length > 0 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--accent-gold, #d97706)' }}>
+                      📱 Students using Only Android App ({platformStats.android_only_students.length})
+                    </div>
+                    <div style={{
+                      maxHeight: '130px',
+                      overflowY: 'auto',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--rule)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.4rem'
+                    }}>
+                      {platformStats.android_only_students.map(s => (
+                        <div key={s.register_number} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderBottom: '1px solid var(--rule)' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{s.register_number}</span>
+                          <span style={{ color: 'var(--ink-soft)' }}>Last active: {s.last_seen || 'Recently'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {platformStats.dual_students?.length > 0 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--good, #16a34a)' }}>
+                      🔄 Students active on both App & Web ({platformStats.dual_students.length})
+                    </div>
+                    <div style={{
+                      maxHeight: '130px',
+                      overflowY: 'auto',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--rule)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.4rem'
+                    }}>
+                      {platformStats.dual_students.map(s => (
+                        <div key={s.register_number} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderBottom: '1px solid var(--rule)' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{s.register_number}</span>
+                          <span style={{ color: 'var(--ink-soft)' }}>Last active: {s.last_seen || 'Recently'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
+                No session data recorded yet.
               </div>
             )}
           </div>

@@ -114,6 +114,7 @@ export const api = {
     body: JSON.stringify({ target_register_number: regNo })
   }),
   getAdminResetLogs: (limit = 25) => request(`/admin/reset-logs?limit=${limit}`),
+  getPlatformStats: () => request('/admin/platform-stats'),
 
   // Daily Reminder Notifications
   getNotificationConfig: () => request('/notifications/config'),
