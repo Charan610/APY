@@ -9,8 +9,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   let data = {
-    title: "Attendance Register Reminder ⏰",
-    body: "Time to mark today's attendance in your register!",
+    title: "Attendance Tracker ⏰",
+    body: "Did you attend your classes today? Tap to record your attendance.",
     url: "/?tab=today",
     tag: "attendance-reminder"
   };

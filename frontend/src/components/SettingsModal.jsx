@@ -254,11 +254,26 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
     }
   };
 
+function formatTime12h(timeStr) {
+  if (!timeStr) return '';
+  const [hStr, mStr] = timeStr.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(m)) return timeStr;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
   const handleAddCustomTime = () => {
     if (!newCustomTime) return;
-    if (customTimes.includes(newCustomTime)) return;
+    if (customTimes.includes(newCustomTime)) {
+      setError(`Time ${formatTime12h(newCustomTime)} is already in your list.`);
+      return;
+    }
     setCustomTimes(prev => [...prev, newCustomTime].sort());
     setNewCustomTime('');
+    setMsg(`Added ${formatTime12h(newCustomTime)}! Click "Save Reminder Schedule" below to save changes.`);
   };
 
   const handleRemoveCustomTime = (timeToRemove) => {
@@ -672,9 +687,51 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
             {/* Custom Times */}
             <div style={{ marginBottom: '1.25rem', opacity: notifEnabled ? 1 : 0.6 }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.4rem' }}>
-                Add Custom Reminder Time
+                Custom Reminder Times ({customTimes.length})
               </div>
-              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+
+              {customTimes.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.65rem' }}>
+                  {customTimes.map((ct) => (
+                    <div
+                      key={ct}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--rule)',
+                        background: 'var(--surface-alt)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <Clock size={14} color="var(--accent-gold)" />
+                        <span style={{ fontWeight: 700, fontSize: '0.85rem' }} className="mono">{formatTime12h(ct)}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--ink-soft)' }}>Custom Reminder</span>
+                      </div>
+                      {notifEnabled && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleRemoveCustomTime(ct)}
+                          style={{ padding: '0.2rem 0.5rem', color: 'var(--bad)', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '3px' }}
+                          title="Remove this custom time"
+                        >
+                          <Trash2 size={12} /> Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: '0.65rem', fontStyle: 'italic' }}>
+                  No custom times added yet. Choose a time below and click "+ Add Time".
+                </div>
+              )}
+
+              {/* Add Custom Time Input */}
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
                 <input
                   type="time"
                   className="form-control mono"
@@ -688,41 +745,11 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
                   className="btn btn-secondary btn-sm"
                   onClick={handleAddCustomTime}
                   disabled={!notifEnabled || !newCustomTime}
+                  style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  <Plus size={14} /> Add
+                  <Plus size={14} /> Add Time
                 </button>
               </div>
-
-              {customTimes.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {customTimes.map(ct => (
-                    <span
-                      key={ct}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        fontSize: '0.75rem',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--surface-alt)',
-                        border: '1px solid var(--rule)'
-                      }}
-                    >
-                      <Clock size={12} /> {ct}
-                      {notifEnabled && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCustomTime(ct)}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 0 }}
-                        >
-                          <Trash2 size={12} color="var(--bad)" />
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Action Buttons */}

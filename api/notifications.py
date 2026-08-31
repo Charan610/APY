@@ -131,8 +131,8 @@ def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[
     }
 
     payload = {
-        "title": "Attendance Register Reminder ⏰",
-        "body": "Time to mark today's attendance in your register!",
+        "title": "Attendance Tracker ⏰",
+        "body": "Did you attend your classes today? Tap to record your attendance.",
         "url": "/?tab=today",
         "timestamp": int(now_ist.timestamp() * 1000)
     }

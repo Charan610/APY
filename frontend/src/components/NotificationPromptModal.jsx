@@ -71,6 +71,17 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
     }));
   };
 
+function formatTime12h(timeStr) {
+  if (!timeStr) return '';
+  const [hStr, mStr] = timeStr.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(m)) return timeStr;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
   const addCustomTime = () => {
     if (!newTimeInput) return;
     if (customTimes.includes(newTimeInput)) return;
@@ -293,9 +304,43 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
             {/* Custom Times */}
             <div style={{ marginBottom: '1.25rem' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '0.4rem' }}>
-                Custom Time (Optional)
+                Custom Reminder Times ({customTimes.length})
               </div>
-              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+
+              {customTimes.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '0.65rem' }}>
+                  {customTimes.map(ct => (
+                    <div
+                      key={ct}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.45rem 0.65rem',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--rule)',
+                        background: 'var(--surface-alt)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Clock size={13} color="var(--accent-gold)" />
+                        <span style={{ fontWeight: 700, fontSize: '0.8rem' }} className="mono">{formatTime12h(ct)}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--ink-soft)' }}>Custom</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeCustomTime(ct)}
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px', padding: '2px 4px', color: 'var(--bad)', fontSize: '0.7rem' }}
+                        title="Remove time"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
                 <input
                   type="time"
                   className="form-control mono"
@@ -308,39 +353,11 @@ export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdat
                   className="btn btn-secondary btn-sm"
                   onClick={addCustomTime}
                   disabled={!newTimeInput}
+                  style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}
                 >
-                  <Plus size={14} /> Add
+                  <Plus size={14} /> Add Time
                 </button>
               </div>
-
-              {customTimes.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {customTimes.map(ct => (
-                    <span
-                      key={ct}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.3rem',
-                        fontSize: '0.75rem',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--surface-alt)',
-                        border: '1px solid var(--rule)'
-                      }}
-                    >
-                      <Clock size={12} /> {ct}
-                      <button
-                        type="button"
-                        onClick={() => removeCustomTime(ct)}
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 0 }}
-                      >
-                        <Trash2 size={12} color="var(--bad)" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
 
             <button
