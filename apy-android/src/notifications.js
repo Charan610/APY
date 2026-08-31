@@ -107,15 +107,6 @@ export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) 
         throw new Error('Notification permission was not granted on your device. Please allow notifications in Android Settings for APY.');
       }
       await initNotificationChannel();
-
-      // Also request push permissions for remote sync if available
-      try {
-        await PushNotifications.requestPermissions();
-        await PushNotifications.register();
-      } catch (pe) {
-        console.warn('Push register notice:', pe);
-      }
-
       return { endpoint: 'android-native', keys: {} };
     } catch (err) {
       throw err;
