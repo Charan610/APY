@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ATT PER Y</string>
+    <string name="title_activity_main">ATT PER Y</string>
+    <string name="package_name">com.apy.attendance</string>
+    <string name="custom_url_scheme">com.apy.attendance</string>
+</resources>
