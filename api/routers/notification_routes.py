@@ -199,11 +199,11 @@ def send_test_notification(current_user: dict = Depends(get_current_user)):
             errors.append(msg)
 
     if sent_count == 0:
-        return {
-            "status": "warning",
-            "message": "Push notification could not be delivered to the registered browser endpoint.",
-            "details": errors
-        }
+        err_msg = errors[0] if errors else "Push notification could not be delivered to the registered browser endpoint."
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not deliver notification: {err_msg}. If you recently cleared browser cookies/permissions, please toggle Reminders OFF and ON to register a fresh device subscription."
+        )
 
     return {
         "status": "success",

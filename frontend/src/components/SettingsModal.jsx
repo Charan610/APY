@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import {
   requestNotificationPermissionAndSubscribe,
+  ensureActivePushSubscription,
   isPushSupported,
   getNotificationPermission
 } from '../notifications';
@@ -269,15 +270,15 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
     setMsg('');
     setTestNotifLoading(true);
     try {
-      if (permissionState !== 'granted') {
-        const sub = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
-        await api.savePushSubscription(sub);
-        setPermissionState(getNotificationPermission());
-      }
+      // Ensure subscription is active in PushManager and saved in database
+      await ensureActivePushSubscription(vapidPublicKey);
+      setPermissionState(getNotificationPermission());
+
       const res = await api.sendTestNotification();
       setMsg(res.message || 'Test notification sent to your device!');
     } catch (err) {
       setError(err.message || 'Failed to send test notification');
+      setPermissionState(getNotificationPermission());
     } finally {
       setTestNotifLoading(false);
     }

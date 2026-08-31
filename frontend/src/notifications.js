@@ -99,6 +99,60 @@ export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) 
   };
 }
 
+export async function ensureActivePushSubscription(vapidPublicKey) {
+  if (!isPushSupported()) {
+    throw new Error('Push notifications are not supported by your current browser.');
+  }
+
+  const permission = Notification.permission;
+  if (permission === 'denied') {
+    throw new Error('Notifications are blocked in your browser settings. Please allow notifications for this site in your browser bar.');
+  }
+
+  let keyToUse = vapidPublicKey;
+  if (!keyToUse) {
+    const config = await api.getNotificationConfig();
+    keyToUse = config?.vapid_public_key;
+  }
+
+  if (!keyToUse) {
+    throw new Error('Server VAPID public key could not be retrieved.');
+  }
+
+  if (permission !== 'granted') {
+    const reqPerm = await Notification.requestPermission();
+    if (reqPerm !== 'granted') {
+      throw new Error(reqPerm === 'denied' ? 'Notifications are blocked in your browser settings. Please allow notifications for this site in your browser bar.' : 'Notification permission was not granted.');
+    }
+  }
+
+  const registration = await registerServiceWorker();
+  if (!registration) {
+    throw new Error('Could not initialize service worker for push notifications.');
+  }
+
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    const convertedKey = urlBase64ToUint8Array(keyToUse);
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: convertedKey
+    });
+  }
+
+  const subJson = subscription.toJSON();
+  const subData = {
+    endpoint: subJson.endpoint,
+    keys: {
+      p256dh: subJson.keys.p256dh,
+      auth: subJson.keys.auth
+    }
+  };
+
+  await api.savePushSubscription(subData);
+  return subData;
+}
+
 export async function unsubscribeFromPush() {
   if (!isPushSupported()) return null;
   try {
@@ -114,3 +168,4 @@ export async function unsubscribeFromPush() {
   }
   return null;
 }
+
