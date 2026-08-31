@@ -12,7 +12,11 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "includeFiles": ["api/**", "backend/**"]
+        "includeFiles": [
+          "api/**",
+          "api/_backend/**",
+          "backend/**"
+        ]
       }
     }
   ],
