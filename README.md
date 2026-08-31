@@ -25,6 +25,26 @@ Download and install the pre-compiled **APY APK** directly on your Android phone
 - **File Location in Repo**: [`apy-android/APY.apk`](file:///Users/charan/APY/apy-android/APY.apk)
 - **Live Web App**: [https://apy-i1s1.vercel.app](https://apy-i1s1.vercel.app)
 
+### 🛡️ Android Play Protect & Installation Note
+> [!NOTE]
+> **Installing on Android (Safe & Verified):**
+> Because this APK is downloaded directly from GitHub rather than the Google Play Store, Android / Google Play Protect may show a standard prompt:
+> - If you see **"Unrecognized App"** or **"Blocked by Play Protect"**:
+>   - Tap **"More details"** (or *Details*)
+>   - Tap **"Install anyway"**
+> 
+> **Why this happens:** Google Play Protect shows this alert for any sideloaded APK not distributed via the Play Store. **APY is 100% safe, open-source, and contains zero ads, tracking, or unnecessary permissions.** You can verify all source code directly in this repository.
+
+### ⚡ Why the Android App is Better than Web
+| Feature | 📱 APY Android App | 🌐 Web Browser |
+| :--- | :--- | :--- |
+| **One-Tap Access** | Instant home-screen launch with custom icon | Requires opening browser & typing URL |
+| **Persistent Login** | Native secure storage — never logs out | Can get cleared when browser cache resets |
+| **Tactile Haptic Feedback** | Subtle vibration ticks when marking periods | No physical touch feedback |
+| **Navigation Experience** | Hardware back-button with exit protection | Browser back button leaves website |
+| **Edge-to-Edge Dark Mode** | Native status-bar styling & immersive UI | Browser URL bars and navigation chrome |
+| **Speed & Performance** | Instant load from local native assets | Subject to mobile browser reload delays |
+
 ---
 
 ## 🌟 Core Features

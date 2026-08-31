@@ -21,7 +21,26 @@ You can download the compiled Android APK directly:
 - **Direct Link**: [**Download APY.apk**](https://github.com/Charan610/APY/raw/main/apy-android/APY.apk)
 - **File in Folder**: `APY.apk`
 
+### 🛡️ Installation & Play Protect Guide (Safe & Verified)
+When installing an APK downloaded directly from GitHub:
+1. Tap the downloaded `APY.apk` file.
+2. If Android prompts **"For your security, your phone is not allowed to install unknown apps from this source"**:
+   - Tap **Settings** -> Enable **"Allow from this source"** -> Tap **Back** -> Tap **Install**.
+3. If Google Play Protect displays **"Unrecognized app"** or **"Blocked by Play Protect"**:
+   - Tap **"More details"** (or *Details*)
+   - Tap **"Install anyway"**
+
+> **Note:** Play Protect shows this standard advisory for all apps installed outside the Play Store. **APY is 100% safe, open-source, and has zero trackers or extra permissions.**
+
 ---
+
+## ⚡ Why Use the Native Android App Over the Website?
+- 🚀 **One-Tap Home Screen Launch**: Instant access from your launcher without opening a browser or typing URLs.
+- 🔑 **Persistent Native Login**: Biometric/secure token persistence ensures you stay signed in seamlessly between classes.
+- 📳 **Tactile Haptic Feedback**: Light vibration response whenever you mark attendance.
+- 🔙 **Hardware Back Navigation**: Intercepts native back button with safety prompt preventing accidental app exit.
+- 🎨 **Immersive Edge-to-Edge UI**: Fluid dark collegiate aesthetics with themed Android status bar.
+- ⚡ **Instant Offline Caching**: Ultra-low latency and fast timetable rendering.
 
 ## 📱 Mobile-Specific Features
 - **Collegiate Graduation Cap Icon**: Clean, high-density adaptive launcher icons matching the brand identity.
