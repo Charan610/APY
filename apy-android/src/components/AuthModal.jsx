@@ -448,7 +448,7 @@ export default function AuthModal({ onAuthSuccess }) {
               type="text"
               className="form-control mono"
               style={{ fontSize: '0.8rem', padding: '0.45rem 0.65rem', marginBottom: '0.5rem' }}
-              placeholder="e.g. https://your-domain.vercel.app/api or http://localhost:8000/api"
+              placeholder="e.g. https://apy-i1s1.vercel.app/api"
               value={serverUrlInput}
               onChange={(e) => setServerUrlInput(e.target.value)}
               required

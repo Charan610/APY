@@ -62,7 +62,7 @@ export const nativeStorage = {
     if (local && !local.includes('localhost') && !local.includes('127.0.0.1')) {
       return local;
     }
-    return import.meta.env.VITE_API_URL || 'https://apy-mu.vercel.app/api';
+    return import.meta.env.VITE_API_URL || 'https://apy-i1s1.vercel.app/api';
   },
 
   async setApiUrl(url) {
