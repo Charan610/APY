@@ -1,6 +1,6 @@
 {
   "appId": "com.apy.attendance",
-  "appName": "ATT PER Y",
+  "appName": "APY",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",

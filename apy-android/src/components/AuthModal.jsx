@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { api, setAuthToken, setStoredUser } from '../api';
+import { api, setAuthToken, setStoredUser, getApiBase, setApiBase } from '../api';
 import TimetableBuilder from './TimetableBuilder';
-import { User, Lock, BookOpen, AlertCircle, CheckCircle2, GraduationCap } from 'lucide-react';
+import { User, Lock, BookOpen, AlertCircle, CheckCircle2, GraduationCap, Server, Globe, RefreshCw, Check } from 'lucide-react';
 
 export default function AuthModal({ onAuthSuccess }) {
   const DEFAULT_SECTIONS = [
@@ -33,6 +33,13 @@ export default function AuthModal({ onAuthSuccess }) {
   const [baselineTotal, setBaselineTotal] = useState('');
   const [baselineDate, setBaselineDate] = useState('2026-08-24');
 
+  // Server URL Configuration Modal
+  const [showServerConfig, setShowServerConfig] = useState(false);
+  const [serverUrlInput, setServerUrlInput] = useState(() => getApiBase());
+  const [testingServer, setTestingServer] = useState(false);
+  const [serverTestStatus, setServerTestStatus] = useState(null); // 'success' | 'error' | null
+  const [serverTestMsg, setServerTestMsg] = useState('');
+
   useEffect(() => {
     loadSections();
   }, []);
@@ -45,6 +52,47 @@ export default function AuthModal({ onAuthSuccess }) {
       }
     } catch (err) {
       console.error('API sections notice:', err);
+    }
+  };
+
+  const handleTestAndSaveServer = async (e) => {
+    e?.preventDefault();
+    setTestingServer(true);
+    setServerTestStatus(null);
+    setServerTestMsg('');
+
+    let targetUrl = serverUrlInput.trim();
+    if (!targetUrl) {
+      setServerTestStatus('error');
+      setServerTestMsg('Please enter a valid URL.');
+      setTestingServer(false);
+      return;
+    }
+
+    if (targetUrl.endsWith('/')) targetUrl = targetUrl.slice(0, -1);
+    if (!targetUrl.endsWith('/api') && !targetUrl.includes('/api/')) {
+      targetUrl = `${targetUrl}/api`;
+    }
+
+    try {
+      // Test connectivity
+      const res = await fetch(`${targetUrl}/sections`, { method: 'GET' });
+      if (res.ok) {
+        setApiBase(targetUrl);
+        setServerUrlInput(targetUrl);
+        setServerTestStatus('success');
+        setServerTestMsg('Connected successfully!');
+        loadSections();
+        setTimeout(() => setShowServerConfig(false), 1200);
+      } else {
+        setServerTestStatus('error');
+        setServerTestMsg(`Server returned error status ${res.status}`);
+      }
+    } catch (err) {
+      setServerTestStatus('error');
+      setServerTestMsg(err.message || 'Cannot reach server at this address.');
+    } finally {
+      setTestingServer(false);
     }
   };
 
@@ -66,7 +114,7 @@ export default function AuthModal({ onAuthSuccess }) {
       setStoredUser(data.user);
       onAuthSuccess(data.user);
     } catch (err) {
-      setError(err.message || 'Login failed. Please check register number / PIN.');
+      setError(err.message || 'Login failed.');
     } finally {
       setLoading(false);
     }
@@ -75,27 +123,18 @@ export default function AuthModal({ onAuthSuccess }) {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
-
-    if (!regNo.trim()) {
-      setError('Please enter your register number.');
-      return;
-    }
-    if (!pin.trim() || pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin)) {
-      setError('PIN must be 4 to 6 digits.');
+    if (!regNo.trim() || !pin.trim()) {
+      setError('Please fill in register number and PIN.');
       return;
     }
 
-    if (isCustomSection) {
-      if (!customBranch.trim() || !customSectionLabel.trim()) {
-        setError('Please enter branch and section label.');
-        return;
-      }
-      if (customBlocks.length === 0) {
-        setError('Please configure timetable blocks for your custom section.');
-        return;
-      }
-    } else if (!selectedSectionId) {
-      setError('Please pick a section.');
+    if (isCustomSection && (!customBranch.trim() || !customSectionLabel.trim())) {
+      setError('Please enter branch and section name.');
+      return;
+    }
+
+    if (isCustomSection && (!customBlocks || customBlocks.length === 0)) {
+      setError('Please configure at least one period in the timetable.');
       return;
     }
 
@@ -171,8 +210,30 @@ export default function AuthModal({ onAuthSuccess }) {
 
         {error && (
           <div className="alert-callout error">
-            <AlertCircle size={16} />
-            <span>{error}</span>
+            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '0.8rem' }}>
+              <div>{error}</div>
+              {error.toLowerCase().includes('connect') && (
+                <button
+                  type="button"
+                  onClick={() => setShowServerConfig(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--ink)',
+                    textDecoration: 'underline',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    marginTop: '0.35rem',
+                    padding: 0,
+                    fontSize: '0.775rem',
+                    display: 'block'
+                  }}
+                >
+                  ⚙️ Tap here to configure Server URL
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -183,15 +244,12 @@ export default function AuthModal({ onAuthSuccess }) {
               <input
                 type="text"
                 className="form-control mono"
-                placeholder="e.g. 23B91A05C0"
+                placeholder="e.g. 25B91A05D8"
                 value={regNo}
                 onChange={(e) => setRegNo(e.target.value.toUpperCase())}
                 autoFocus
                 required
               />
-              <div style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginTop: '0.25rem' }}>
-                Tester seed: <strong>23B91A05C0</strong> (PIN: 1234)
-              </div>
             </div>
 
             <div className="form-field">
@@ -218,7 +276,7 @@ export default function AuthModal({ onAuthSuccess }) {
               <input
                 type="text"
                 className="form-control mono"
-                placeholder="e.g. 23B91A0501"
+                placeholder="e.g. 25B91A05D8"
                 value={regNo}
                 onChange={(e) => setRegNo(e.target.value.toUpperCase())}
                 required
@@ -261,73 +319,48 @@ export default function AuthModal({ onAuthSuccess }) {
                   </button>
                 ))}
               </div>
-
-              {customBranch === 'CSE' && !isCustomSection ? (
-                <div>
-                  <label className="form-label">CSE Section (Pre-Seeded)</label>
-                  <select
-                    className="form-control mono"
-                    value={selectedSectionId}
-                    onChange={(e) => setSelectedSectionId(e.target.value)}
-                  >
-                    {sections.filter(s => s.branch === 'CSE').map((s) => (
-                      <option key={s.id} value={s.id}>
-                        CSE — Section {s.section_label} ({s.weekly_periods} periods/wk)
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.3rem' }}>
-                    <button
-                      type="button"
-                      style={{ background: 'none', border: 'none', color: 'var(--ink)', fontSize: '0.725rem', cursor: 'pointer', textDecoration: 'underline' }}
-                      onClick={() => setIsCustomSection(true)}
-                    >
-                      + Custom CSE Section
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', padding: '0.85rem', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <div>
-                      <label className="form-label">Branch Name</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g. AIDS, ECE"
-                        value={customBranch}
-                        onChange={(e) => setCustomBranch(e.target.value.toUpperCase())}
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Section Name / Letter</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g. A, B, 1"
-                        value={customSectionLabel}
-                        onChange={(e) => setCustomSectionLabel(e.target.value.toUpperCase())}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: '0.65rem' }}>
-                    Define timetable now (or edit anytime later in the <strong>Timetable</strong> tab):
-                  </div>
-
-                  <TimetableBuilder
-                    onSave={(blocks) => setCustomBlocks(blocks)}
-                    showHeader={false}
-                  />
-                  {customBlocks.length > 0 && (
-                    <div style={{ marginTop: '0.5rem', color: 'var(--good)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <CheckCircle2 size={13} /> {customBlocks.length} periods configured for {customBranch}-{customSectionLabel || 'Section'}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
+
+            {!isCustomSection ? (
+              <div className="form-field">
+                <label className="form-label">Pre-Seeded CSE Section</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.35rem' }}>
+                  {sections.map((sec) => (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      className={`btn ${selectedSectionId === String(sec.id) ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                      style={{ padding: '0.4rem 0.2rem', fontSize: '0.75rem' }}
+                      onClick={() => setSelectedSectionId(String(sec.id))}
+                    >
+                      Sec {sec.section_label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ border: '1px solid var(--rule)', borderRadius: 'var(--radius-md)', padding: '0.85rem', marginBottom: '1rem', background: 'var(--surface)' }}>
+                <div className="form-field">
+                  <label className="form-label">Section Identifier</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. A, B, or 1"
+                    maxLength={3}
+                    value={customSectionLabel}
+                    onChange={(e) => setCustomSectionLabel(e.target.value.toUpperCase())}
+                    required
+                  />
+                </div>
+
+                <div style={{ marginTop: '0.75rem' }}>
+                  <label className="form-label">Build Weekly Timetable Schedule</label>
+                  <TimetableBuilder
+                    onChange={(blocks) => setCustomBlocks(blocks)}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Optional Baseline */}
             <div style={{ borderTop: '1px dashed var(--rule)', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
@@ -363,6 +396,89 @@ export default function AuthModal({ onAuthSuccess }) {
             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1.25rem' }} disabled={loading}>
               {loading ? 'Creating Account...' : 'Complete Registration'}
             </button>
+          </form>
+        )}
+
+        {/* Server Connection Footer */}
+        <div style={{
+          marginTop: '1.25rem',
+          paddingTop: '0.85rem',
+          borderTop: '1px solid var(--rule)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.725rem',
+          color: 'var(--ink-soft)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
+            <Server size={12} />
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{getApiBase()}</span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', fontWeight: 600 }}
+            onClick={() => {
+              setServerUrlInput(getApiBase());
+              setServerTestStatus(null);
+              setServerTestMsg('');
+              setShowServerConfig(!showServerConfig);
+            }}
+          >
+            {showServerConfig ? 'Close' : 'Change'}
+          </button>
+        </div>
+
+        {/* Inline Server Config Editor */}
+        {showServerConfig && (
+          <form
+            onSubmit={handleTestAndSaveServer}
+            style={{
+              marginTop: '0.75rem',
+              background: 'var(--surface-alt)',
+              padding: '0.85rem',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--rule)'
+            }}
+          >
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.35rem', color: 'var(--ink)' }}>
+              Backend Server URL:
+            </div>
+            <input
+              type="text"
+              className="form-control mono"
+              style={{ fontSize: '0.8rem', padding: '0.45rem 0.65rem', marginBottom: '0.5rem' }}
+              placeholder="e.g. https://your-domain.vercel.app/api or http://localhost:8000/api"
+              value={serverUrlInput}
+              onChange={(e) => setServerUrlInput(e.target.value)}
+              required
+            />
+            {serverTestMsg && (
+              <div style={{
+                fontSize: '0.75rem',
+                marginBottom: '0.5rem',
+                color: serverTestStatus === 'success' ? 'var(--good, #16a34a)' : 'var(--bad, #dc2626)',
+                fontWeight: 600
+              }}>
+                {serverTestStatus === 'success' ? '✓ ' : '✕ '} {serverTestMsg}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowServerConfig(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={testingServer}
+              >
+                {testingServer ? 'Testing...' : 'Test & Save'}
+              </button>
+            </div>
           </form>
         )}
       </div>

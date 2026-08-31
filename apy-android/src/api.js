@@ -1,15 +1,33 @@
 import { nativeStorage } from './nativeStorage';
+import { Capacitor } from '@capacitor/core';
 
-let cachedApiUrl = localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || 'https://apy-navy.vercel.app/api';
+let cachedApiUrl = localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+export function getClientPlatform() {
+  try {
+    const p = Capacitor.getPlatform();
+    return ['android', 'ios'].includes(p) ? p : 'android';
+  } catch (e) {
+    return 'android';
+  }
+}
 
 export function getApiBase() {
-  return cachedApiUrl;
+  return localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || cachedApiUrl;
 }
 
 export function setApiBase(url) {
   if (url) {
-    cachedApiUrl = url;
-    nativeStorage.setApiUrl(url);
+    let cleanUrl = url.trim();
+    if (cleanUrl.endsWith('/')) {
+      cleanUrl = cleanUrl.slice(0, -1);
+    }
+    if (!cleanUrl.endsWith('/api') && !cleanUrl.includes('/api/')) {
+      cleanUrl = `${cleanUrl}/api`;
+    }
+    cachedApiUrl = cleanUrl;
+    nativeStorage.setApiUrl(cleanUrl);
+    localStorage.setItem('attendance_api_url', cleanUrl);
   }
 }
 
@@ -32,28 +50,38 @@ export function setStoredUser(user) {
 
 async function request(endpoint, options = {}) {
   const token = getAuthToken();
+  const baseUrl = getApiBase();
+  const platform = getClientPlatform();
   const headers = {
     'Content-Type': 'application/json',
+    'X-Client-Platform': platform,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
 
-  const response = await fetch(`${cachedApiUrl}${endpoint}`, {
-    ...options,
-    headers
-  });
+  try {
+    const response = await fetch(`${baseUrl}${endpoint}`, {
+      ...options,
+      headers
+    });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+    }
+    return data;
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+      throw new Error(`Cannot connect to server at ${baseUrl}. Please check your server URL or internet connection.`);
+    }
+    throw err;
   }
-  return data;
 }
 
 export const api = {
   // Auth
-  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
-  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify({ platform: getClientPlatform(), ...payload }) }),
+  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify({ platform: getClientPlatform(), ...payload }) }),
   getMe: () => request('/auth/me'),
   updateBaseline: (payload) => request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) }),
   updateSection: (sectionId) => request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) }),

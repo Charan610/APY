@@ -29,6 +29,7 @@ async function request(endpoint, options = {}) {
   const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
+    'X-Client-Platform': 'web',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
@@ -47,8 +48,8 @@ async function request(endpoint, options = {}) {
 
 export const api = {
   // Auth
-  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
-  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify({ platform: 'web', ...payload }) }),
+  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify({ platform: 'web', ...payload }) }),
   getMe: () => request('/auth/me'),
   updateBaseline: (payload) => request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) }),
   updateSection: (sectionId) => request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) }),

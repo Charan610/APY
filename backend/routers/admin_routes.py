@@ -43,6 +43,30 @@ def search_student(
             (reg_clean,)
         )
         row = cursor.fetchone()
+
+        def enrich_user_with_sessions(user_dict):
+            if not user_dict or "id" not in user_dict:
+                return user_dict
+            try:
+                cursor.execute(
+                    """
+                    SELECT platform, created_at, last_seen_at
+                    FROM login_sessions
+                    WHERE user_id = ?
+                    ORDER BY last_seen_at DESC
+                    LIMIT 5
+                    """,
+                    (user_dict["id"],)
+                )
+                sessions = [dict(s) for s in cursor.fetchall()]
+                platforms = list(dict.fromkeys([s["platform"] for s in sessions]))
+                user_dict["platforms"] = platforms
+                user_dict["recent_sessions"] = sessions
+            except Exception:
+                user_dict["platforms"] = []
+                user_dict["recent_sessions"] = []
+            return user_dict
+
         if not row:
             # Also attempt prefix search if exact match not found
             cursor.execute(
@@ -68,15 +92,17 @@ def search_student(
                 (f"%{reg_clean}%",)
             )
             matches = cursor.fetchall()
+            enriched_matches = [enrich_user_with_sessions(dict(m)) for m in matches] if matches else []
             return {
                 "exact_match": None,
-                "matches": [dict(m) for m in matches] if matches else [],
-                "count": len(matches) if matches else 0
+                "matches": enriched_matches,
+                "count": len(enriched_matches)
             }
 
+        exact_dict = enrich_user_with_sessions(dict(row))
         return {
-            "exact_match": dict(row),
-            "matches": [dict(row)],
+            "exact_match": exact_dict,
+            "matches": [exact_dict],
             "count": 1
         }
 

@@ -436,6 +436,45 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
                   </div>
                 </div>
 
+                {/* Platforms & Recent Activity */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'var(--surface-alt)',
+                  padding: '0.5rem 0.65rem',
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: '1rem',
+                  border: '1px solid var(--rule)',
+                  fontSize: '0.76rem'
+                }}>
+                  <span style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>Active Platforms:</span>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    {(student.platforms && student.platforms.length > 0) ? (
+                      student.platforms.map(p => (
+                        <span
+                          key={p}
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '10px',
+                            background: p === 'android' ? 'rgba(34, 197, 94, 0.15)' : p === 'ios' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                            color: p === 'android' ? '#15803d' : p === 'ios' ? '#1d4ed8' : '#7e22ce',
+                            fontWeight: 700,
+                            fontSize: '0.72rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
+                          }}
+                        >
+                          {p === 'android' ? '📱 Android' : p === 'ios' ? '🍏 iOS' : '🌐 Web'}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ color: 'var(--ink-soft)' }}>🌐 Web</span>
+                    )}
+                  </div>
+                </div>
+
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',

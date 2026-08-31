@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Header
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from database import get_db
-from auth import hash_pin, verify_pin, create_access_token, get_current_user, check_rate_limit, record_failed_attempt, clear_rate_limit, is_admin_user
+from auth import (
+    hash_pin, verify_pin, create_access_token, get_current_user,
+    check_rate_limit, record_failed_attempt, clear_rate_limit,
+    is_admin_user, record_login_session, touch_login_session
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -26,6 +30,7 @@ class TimetableBlockInput(BaseModel):
 class RegisterRequest(BaseModel):
     register_number: str = Field(..., min_length=3, max_length=20)
     pin: str = Field(..., min_length=4, max_length=6)
+    platform: Optional[str] = "web"
     section_id: Optional[int] = None
     # For custom section onboarding
     custom_branch: Optional[str] = None
@@ -52,6 +57,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     register_number: str
     pin: str
+    platform: Optional[str] = "web"
 
     @field_validator("register_number")
     @classmethod
@@ -148,6 +154,8 @@ def register(req: RegisterRequest):
         sec_info = cursor.fetchone()
 
         token = create_access_token({"sub": user_id, "reg": req.register_number})
+        client_platform = req.platform or "web"
+        record_login_session(user_id, client_platform, token, db_conn=conn)
         
         return {
             "token": token,
@@ -165,7 +173,7 @@ def register(req: RegisterRequest):
         }
 
 @router.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, x_client_platform: Optional[str] = Header(None, alias="X-Client-Platform")):
     check_rate_limit(req.register_number)
     
     with get_db() as conn:
@@ -193,6 +201,9 @@ def login(req: LoginRequest):
         clear_rate_limit(req.register_number)
         token = create_access_token({"sub": user["id"], "reg": user["register_number"]})
         
+        client_platform = req.platform or x_client_platform or "web"
+        record_login_session(user["id"], client_platform, token, db_conn=conn)
+
         return {
             "token": token,
             "user": {
@@ -209,7 +220,12 @@ def login(req: LoginRequest):
         }
 
 @router.get("/me")
-def me(current_user: dict = Depends(get_current_user)):
+def me(
+    current_user: dict = Depends(get_current_user),
+    x_client_platform: Optional[str] = Header(None, alias="X-Client-Platform")
+):
+    if x_client_platform:
+        touch_login_session(current_user["id"], platform=x_client_platform)
     return {"user": current_user}
 
 @router.put("/change-pin")

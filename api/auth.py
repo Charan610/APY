@@ -152,7 +152,64 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
             )
         user_dict = dict(user)
         user_dict["is_admin"] = is_admin_user(user_dict.get("register_number"))
+        touch_login_session(user_id, token=token)
         return user_dict
+
+def hash_token(token: str) -> str:
+    """Computes a SHA-256 hash of a session token for secure storage & fast lookup."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+def record_login_session(user_id: int, platform: Optional[str], token: str, db_conn=None):
+    """Records a new or refreshed login session tagged by platform (web, android, ios)."""
+    clean_platform = (platform or "web").lower().strip()
+    if clean_platform not in ("web", "android", "ios"):
+        clean_platform = "web"
+    t_hash = hash_token(token)
+    try:
+        if db_conn is not None:
+            cursor = db_conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO login_sessions (user_id, platform, token_hash, created_at, last_seen_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (user_id, clean_platform, t_hash)
+            )
+        else:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO login_sessions (user_id, platform, token_hash, created_at, last_seen_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """,
+                    (user_id, clean_platform, t_hash)
+                )
+    except Exception as e:
+        print("Record login session notice:", e)
+
+def touch_login_session(user_id: int, token: Optional[str] = None, platform: Optional[str] = None, db_conn=None):
+    """Updates last_seen_at for the active user session."""
+    try:
+        if db_conn is not None:
+            cursor = db_conn.cursor()
+            if token:
+                t_hash = hash_token(token)
+                cursor.execute("UPDATE login_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE token_hash = ?", (t_hash,))
+            elif platform:
+                clean_platform = platform.lower().strip()
+                cursor.execute("UPDATE login_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE user_id = ? AND platform = ?", (user_id, clean_platform))
+        else:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                if token:
+                    t_hash = hash_token(token)
+                    cursor.execute("UPDATE login_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE token_hash = ?", (t_hash,))
+                elif platform:
+                    clean_platform = platform.lower().strip()
+                    cursor.execute("UPDATE login_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE user_id = ? AND platform = ?", (user_id, clean_platform))
+    except Exception as e:
+        pass
 
 def get_admin_register_numbers() -> set:
     raw = os.environ.get("ADMIN_REGISTER_NUMBERS", "25B91A05D8,23B91A05C0")

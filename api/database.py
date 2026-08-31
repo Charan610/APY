@@ -417,6 +417,22 @@ def init_db():
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_pin_reset_target ON pin_reset_log(target_register_number);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_pin_reset_by ON pin_reset_log(reset_by_register_number);")
+
+            # Login sessions table (Additive for Web vs App tracking)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS login_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                platform TEXT NOT NULL DEFAULT 'web',
+                token_hash TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_sessions_user ON login_sessions(user_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_sessions_platform ON login_sessions(platform);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_sessions_token ON login_sessions(token_hash);")
     except Exception as e:
         print("Init DB notice:", e)
 
