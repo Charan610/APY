@@ -261,6 +261,7 @@ def get_db_connection():
             pass
             
         if not _local_schema_initialized:
+            _local_schema_initialized = True
             try:
                 cursor = conn.cursor()
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
@@ -272,7 +273,6 @@ def get_db_connection():
                         seed_database()
                     except Exception:
                         pass
-                _local_schema_initialized = True
             except Exception as e:
                 logger.warning(f"Auto-init DB check notice: {e}")
                 
