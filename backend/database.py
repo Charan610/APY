@@ -7,7 +7,7 @@ import urllib.error
 import logging
 import httpx
 from datetime import datetime
-from typing import Generator, Any, List, Optional
+from typing import Generator, Any, List, Optional, Dict
 from contextlib import contextmanager
 
 logger = logging.getLogger("database")
