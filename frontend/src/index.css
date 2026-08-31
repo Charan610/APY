@@ -176,7 +176,8 @@ h1, h2, h3, h4, .heading-ledger {
   background: var(--surface);
   border-top: 1px solid var(--rule);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   padding: 0.45rem 0.25rem;
   padding-bottom: calc(0.45rem + env(safe-area-inset-bottom, 0px));
   z-index: 900;

@@ -10,7 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import NotificationPromptModal from './components/NotificationPromptModal';
 import AdminModal from './components/AdminModal';
 import { registerServiceWorker } from './notifications';
-import { CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react';
+import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
@@ -295,6 +295,18 @@ export default function App() {
               <span>Forecast</span>
               {activeTab === 'forecast' && <div className="tab-indicator" />}
             </button>
+
+            {(user?.is_admin || (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))) && (
+              <button
+                type="button"
+                className="tab-btn"
+                onClick={() => setShowAdminModal(true)}
+                style={{ color: 'var(--accent-gold, #d97706)', fontWeight: 700 }}
+              >
+                <ShieldCheck size={18} />
+                <span>Admin</span>
+              </button>
+            )}
           </nav>
 
           {/* Post-Login One-Time Reminder Prompt */}
@@ -312,6 +324,7 @@ export default function App() {
             initialTab={settingsTab}
             onClose={() => setShowSettings(false)}
             user={user}
+            onOpenAdmin={() => setShowAdminModal(true)}
             onUserUpdated={(updatedUser) => {
               if (updatedUser) {
                 setUser(updatedUser);

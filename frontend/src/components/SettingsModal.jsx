@@ -21,7 +21,8 @@ import {
   Send,
   AlertTriangle,
   KeyRound,
-  Lock
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 const GithubIcon = () => (
@@ -46,7 +47,11 @@ const DEFAULT_SECTIONS = [
   { id: 5, branch: 'CSE', section_label: 'E', weekly_periods: 34 }
 ];
 
-export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, initialTab = 'profile' }) {
+export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, onOpenAdmin, initialTab = 'profile' }) {
+  const isAdmin = Boolean(
+    user?.is_admin ||
+    (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))
+  );
   const [activeTab, setActiveTab] = useState(initialTab || 'profile');
 
   // Profile & Baseline state
@@ -467,6 +472,45 @@ function formatTime12h(timeStr) {
             <X size={16} /> Close
           </button>
         </div>
+
+        {/* Admin Mode Quick-Access Banner (For Admins) */}
+        {isAdmin && (
+          <div style={{
+            background: 'var(--accent-gold-bg, rgba(217, 119, 6, 0.12))',
+            border: '1px solid var(--accent-gold, #d97706)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.65rem 0.85rem',
+            marginBottom: '1.15rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.5rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ShieldCheck size={18} color="var(--accent-gold, #d97706)" />
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink)' }}>
+                Administrator Mode Active
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                onClose();
+                if (onOpenAdmin) onOpenAdmin();
+              }}
+              style={{
+                fontSize: '0.75rem',
+                padding: '0.35rem 0.65rem',
+                background: 'var(--accent-gold, #d97706)',
+                borderColor: 'var(--accent-gold, #d97706)',
+                fontWeight: 700
+              }}
+            >
+              Open PIN Reset Panel
+            </button>
+          </div>
+        )}
 
         {/* Tab Selector Inside Settings */}
         <div style={{
