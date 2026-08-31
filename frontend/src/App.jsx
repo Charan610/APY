@@ -44,6 +44,51 @@ export default function App() {
     initSession();
   }, []);
 
+  // 3. Live in-app reminder scheduler for active browser tabs & PWAs
+  useEffect(() => {
+    if (!user) return;
+    const firedMinutes = new Set();
+
+    const checkReminders = async () => {
+      try {
+        if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+          return;
+        }
+
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const currentTimeStr = `${hours}:${minutes}`;
+
+        if (firedMinutes.has(currentTimeStr)) return;
+
+        const config = await api.getNotificationConfig().catch(() => null);
+        if (!config || !config.enabled || !Array.isArray(config.active_times)) return;
+
+        const matchingTime = config.active_times.find(t => t.time_of_day === currentTimeStr);
+        if (matchingTime) {
+          firedMinutes.add(currentTimeStr);
+          if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            reg.showNotification('Attendance Tracker ⏰', {
+              body: 'Did you attend your classes today? Tap to record your attendance.',
+              icon: '/favicon.svg',
+              badge: '/favicon.svg',
+              tag: `attendance-reminder-${currentTimeStr}`,
+              renotify: true,
+              data: { url: '/?tab=today' }
+            });
+          }
+        }
+      } catch (e) {
+        // Non-blocking catch
+      }
+    };
+
+    const interval = setInterval(checkReminders, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const checkNotificationPromptEligibility = async () => {
     try {
       const dismissed = localStorage.getItem('apy_notif_prompt_dismissed');

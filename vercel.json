@@ -20,6 +20,12 @@
       }
     }
   ],
+  "crons": [
+    {
+      "path": "/api/notifications/cron",
+      "schedule": "0 9,12,16 * * *"
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
