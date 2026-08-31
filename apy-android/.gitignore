@@ -11,4 +11,5 @@ android/captures/
 android/local.properties
 .DS_Store
 *.apk
+!APY.apk
 *.aab
