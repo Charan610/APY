@@ -2,9 +2,20 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from database import get_db
-from auth import hash_pin, verify_pin, create_access_token, get_current_user, check_rate_limit, record_failed_attempt, clear_rate_limit
+from auth import hash_pin, verify_pin, create_access_token, get_current_user, check_rate_limit, record_failed_attempt, clear_rate_limit, is_admin_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+class ChangePinRequest(BaseModel):
+    current_pin: str = Field(..., min_length=4, max_length=6)
+    new_pin: str = Field(..., min_length=4, max_length=6)
+
+    @field_validator("current_pin", "new_pin")
+    @classmethod
+    def validate_pin(cls, v: str):
+        if not v.isdigit():
+            raise ValueError("PIN must consist of digits only (4-6 digits)")
+        return v
 
 class TimetableBlockInput(BaseModel):
     weekday: int = Field(..., ge=1, le=6, description="1=Mon..6=Sat")
@@ -148,7 +159,8 @@ def register(req: RegisterRequest):
                 "section_label": sec_info["section_label"] if sec_info else "",
                 "baseline_attended": req.baseline_attended or 0,
                 "baseline_total": req.baseline_total or 0,
-                "baseline_date": req.baseline_date
+                "baseline_date": req.baseline_date,
+                "is_admin": is_admin_user(req.register_number)
             }
         }
 
@@ -191,13 +203,31 @@ def login(req: LoginRequest):
                 "section_label": user["section_label"],
                 "baseline_attended": user["baseline_attended"],
                 "baseline_total": user["baseline_total"],
-                "baseline_date": user["baseline_date"]
+                "baseline_date": user["baseline_date"],
+                "is_admin": is_admin_user(user["register_number"])
             }
         }
 
 @router.get("/me")
 def me(current_user: dict = Depends(get_current_user)):
     return {"user": current_user}
+
+@router.put("/change-pin")
+@router.post("/change-pin")
+def change_pin(req: ChangePinRequest, current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT pin_hash FROM users WHERE id = ?", (current_user["id"],))
+        row = cursor.fetchone()
+        if not row or not verify_pin(req.current_pin, row["pin_hash"]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current PIN is incorrect"
+            )
+        
+        new_hash = hash_pin(req.new_pin)
+        cursor.execute("UPDATE users SET pin_hash = ? WHERE id = ?", (new_hash, current_user["id"]))
+        return {"status": "success", "message": "PIN updated successfully"}
 
 @router.put("/baseline")
 def update_baseline(req: UpdateBaselineRequest, current_user: dict = Depends(get_current_user)):

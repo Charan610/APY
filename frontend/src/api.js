@@ -52,6 +52,7 @@ export const api = {
   getMe: () => request('/auth/me'),
   updateBaseline: (payload) => request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) }),
   updateSection: (sectionId) => request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) }),
+  changePin: (payload) => request('/auth/change-pin', { method: 'PUT', body: JSON.stringify(payload) }),
 
   // Sections
   getSections: () => request('/sections'),
@@ -68,8 +69,14 @@ export const api = {
   getSummary: () => request('/attendance/summary'),
   getForecast: (targetDate) => request(`/attendance/forecast?target_date=${targetDate}`),
 
-  // Backup
+  // Admin
   triggerBackup: () => request('/admin/backup', { method: 'POST' }),
+  searchStudent: (regNo) => request(`/admin/search?register_number=${encodeURIComponent(regNo)}`),
+  resetStudentPin: (regNo) => request('/admin/reset-pin', {
+    method: 'POST',
+    body: JSON.stringify({ target_register_number: regNo })
+  }),
+  getAdminResetLogs: (limit = 25) => request(`/admin/reset-logs?limit=${limit}`),
 
   // Daily Reminder Notifications
   getNotificationConfig: () => request('/notifications/config'),

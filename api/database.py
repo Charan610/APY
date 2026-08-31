@@ -405,6 +405,18 @@ def init_db():
                 cursor.execute("ALTER TABLE notification_times ADD COLUMN last_sent_date TEXT;")
             except Exception:
                 pass
+
+            # PIN reset log table (Additive for Admin PIN reset audit trail)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pin_reset_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_register_number TEXT NOT NULL,
+                reset_by_register_number TEXT NOT NULL,
+                reset_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pin_reset_target ON pin_reset_log(target_register_number);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pin_reset_by ON pin_reset_log(reset_by_register_number);")
     except Exception as e:
         print("Init DB notice:", e)
 

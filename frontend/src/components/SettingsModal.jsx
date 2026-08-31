@@ -19,7 +19,9 @@ import {
   Plus,
   Trash2,
   Send,
-  AlertTriangle
+  AlertTriangle,
+  KeyRound,
+  Lock
 } from 'lucide-react';
 
 const GithubIcon = () => (
@@ -73,6 +75,12 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
   const [testNotifLoading, setTestNotifLoading] = useState(false);
   const [permissionState, setPermissionState] = useState('default');
 
+  // Change PIN state
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmNewPin, setConfirmNewPin] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -91,6 +99,9 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       setActiveTab(initialTab || 'profile');
       setMsg('');
       setError('');
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmNewPin('');
       loadSections();
       loadNotificationConfig();
       setPermissionState(getNotificationPermission());
@@ -102,6 +113,41 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, in
       }
     }
   }, [isOpen, user, initialTab]);
+
+  const handleChangePin = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMsg('');
+
+    if (!currentPin) {
+      setError('Please enter your current PIN.');
+      return;
+    }
+    if (!newPin || newPin.length < 4 || newPin.length > 6 || !/^\d+$/.test(newPin)) {
+      setError('New PIN must be 4 to 6 numeric digits.');
+      return;
+    }
+    if (newPin !== confirmNewPin) {
+      setError('New PIN and Confirmation PIN do not match.');
+      return;
+    }
+
+    setPinLoading(true);
+    try {
+      await api.changePin({
+        current_pin: currentPin,
+        new_pin: newPin
+      });
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmNewPin('');
+      setMsg('PIN changed successfully! You can now use your new PIN on your next login.');
+    } catch (err) {
+      setError(err.message || 'Failed to change PIN');
+    } finally {
+      setPinLoading(false);
+    }
+  };
 
   const loadSections = async () => {
     try {
@@ -438,7 +484,7 @@ function formatTime12h(timeStr) {
             style={{
               flex: 1,
               padding: '0.45rem',
-              fontSize: '0.8rem',
+              fontSize: '0.78rem',
               fontWeight: activeTab === 'profile' ? 700 : 500
             }}
             onClick={() => { setActiveTab('profile'); setMsg(''); setError(''); }}
@@ -448,11 +494,25 @@ function formatTime12h(timeStr) {
           </button>
           <button
             type="button"
+            className={`btn ${activeTab === 'security' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              flex: 1,
+              padding: '0.45rem',
+              fontSize: '0.78rem',
+              fontWeight: activeTab === 'security' ? 700 : 500
+            }}
+            onClick={() => { setActiveTab('security'); setMsg(''); setError(''); }}
+          >
+            <KeyRound size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            Security & PIN
+          </button>
+          <button
+            type="button"
             className={`btn ${activeTab === 'reminders' ? 'btn-primary' : 'btn-secondary'}`}
             style={{
               flex: 1,
               padding: '0.45rem',
-              fontSize: '0.8rem',
+              fontSize: '0.78rem',
               fontWeight: activeTab === 'reminders' ? 700 : 500
             }}
             onClick={() => { setActiveTab('reminders'); setMsg(''); setError(''); }}
@@ -464,9 +524,9 @@ function formatTime12h(timeStr) {
             type="button"
             className={`btn ${activeTab === 'about' ? 'btn-primary' : 'btn-secondary'}`}
             style={{
-              flex: 0.8,
+              flex: 0.7,
               padding: '0.45rem',
-              fontSize: '0.8rem',
+              fontSize: '0.78rem',
               fontWeight: activeTab === 'about' ? 700 : 500
             }}
             onClick={() => { setActiveTab('about'); setMsg(''); setError(''); }}
@@ -839,7 +899,120 @@ function formatTime12h(timeStr) {
           </div>
         )}
 
-        {/* TAB 3: About */}
+        {/* TAB 2: Security & PIN */}
+        {activeTab === 'security' && (
+          <div>
+            <div style={{
+              background: 'var(--surface-alt)',
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem',
+              marginBottom: '1.25rem',
+              fontSize: '0.82rem',
+              color: 'var(--ink-soft)',
+              lineHeight: 1.4
+            }}>
+              <div style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Lock size={15} color="var(--accent-gold)" /> Change Your Account PIN
+              </div>
+              Update your account PIN anytime. If an admin provided you with a temporary PIN, enter it as your Current PIN below to establish your own secret PIN.
+            </div>
+
+            <form onSubmit={handleChangePin}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--ink)' }}>
+                  Current PIN
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={currentPin}
+                  onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter current 4-6 digit PIN"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    fontFamily: 'monospace',
+                    letterSpacing: '3px',
+                    fontSize: '1rem',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--ink)' }}>
+                  New PIN (4–6 numeric digits)
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Enter new 4-6 digit PIN"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    fontFamily: 'monospace',
+                    letterSpacing: '3px',
+                    fontSize: '1rem',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--ink)' }}>
+                  Confirm New PIN
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={confirmNewPin}
+                  onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Re-enter new 4-6 digit PIN"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    fontFamily: 'monospace',
+                    letterSpacing: '3px',
+                    fontSize: '1rem',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={pinLoading || !currentPin || !newPin || !confirmNewPin}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                <KeyRound size={16} />
+                <span>{pinLoading ? 'Updating PIN...' : 'Update PIN'}</span>
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* TAB 4: About */}
         {activeTab === 'about' && (
           <div>
             <div style={{

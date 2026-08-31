@@ -150,4 +150,23 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found"
             )
-        return dict(user)
+        user_dict = dict(user)
+        user_dict["is_admin"] = is_admin_user(user_dict.get("register_number"))
+        return user_dict
+
+def get_admin_register_numbers() -> set:
+    raw = os.environ.get("ADMIN_REGISTER_NUMBERS", "25B91A05D8,23B91A05C0")
+    return {r.strip().upper() for r in raw.split(",") if r.strip()}
+
+def is_admin_user(register_number: Optional[str]) -> bool:
+    if not register_number:
+        return False
+    return register_number.strip().upper() in get_admin_register_numbers()
+
+def get_current_admin_user(current_user: dict = Depends(get_current_user)) -> dict:
+    if not is_admin_user(current_user.get("register_number")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin privileges required."
+        )
+    return current_user

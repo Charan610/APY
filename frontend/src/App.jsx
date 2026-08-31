@@ -8,6 +8,7 @@ import TimetableTab from './components/TimetableTab';
 import ForecastTab from './components/ForecastTab';
 import SettingsModal from './components/SettingsModal';
 import NotificationPromptModal from './components/NotificationPromptModal';
+import AdminModal from './components/AdminModal';
 import { registerServiceWorker } from './notifications';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles } from 'lucide-react';
 
@@ -35,6 +36,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('profile');
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
 
   useEffect(() => {
     // 1. Initialize background service worker
@@ -219,6 +221,7 @@ export default function App() {
               setSettingsTab('reminders');
               setShowSettings(true);
             }}
+            onOpenAdmin={() => setShowAdminModal(true)}
             onLogout={handleLogout}
           />
 
@@ -317,6 +320,15 @@ export default function App() {
               initSession();
             }}
           />
+
+          {/* Admin Modal (Restricted to Authorized Admins) */}
+          {(user?.is_admin || (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))) && (
+            <AdminModal
+              isOpen={showAdminModal}
+              onClose={() => setShowAdminModal(false)}
+              currentUser={user}
+            />
+          )}
         </>
       )}
     </div>

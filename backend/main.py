@@ -8,8 +8,9 @@ from routers.auth_routes import router as auth_router
 from routers.section_routes import router as section_router
 from routers.attendance_routes import router as attendance_router
 from routers.notification_routes import router as notification_router
+from routers.admin_routes import router as admin_router
 from notifications import dispatch_scheduled_reminders
-from auth import get_current_user
+from auth import get_current_user, get_current_admin_user
 
 # Setup background scheduler for local/dedicated servers only
 scheduler = None
@@ -51,6 +52,7 @@ for pfx in ["/api", ""]:
     app.include_router(section_router, prefix=pfx)
     app.include_router(attendance_router, prefix=pfx)
     app.include_router(notification_router, prefix=pfx)
+    app.include_router(admin_router, prefix=pfx)
 
 from fastapi.responses import JSONResponse
 import traceback
