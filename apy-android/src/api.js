@@ -43,13 +43,39 @@ export function setAuthToken(token) {
   nativeStorage.setToken(token);
 }
 
+export const ADMIN_REGISTER_NUMBERS = ['25B91A05D8', '23B91A05C0', '23B91A0588', '23B91A0577'];
+
+export function checkIsAdmin(user) {
+  if (!user) return false;
+  if (user.is_admin === true || user.is_admin === 1 || user.is_admin === 'true') return true;
+  const reg = (user.register_number || '').trim().toUpperCase();
+  return ADMIN_REGISTER_NUMBERS.includes(reg);
+}
+
 export function getStoredUser() {
   const user = localStorage.getItem('attendance_user');
-  return user ? JSON.parse(user) : null;
+  if (!user) return null;
+  try {
+    const u = JSON.parse(user);
+    if (u && typeof u === 'object') {
+      u.is_admin = checkIsAdmin(u);
+    }
+    return u;
+  } catch {
+    return null;
+  }
 }
 
 export function setStoredUser(user) {
-  nativeStorage.setUser(user);
+  if (user) {
+    const enriched = {
+      ...user,
+      is_admin: checkIsAdmin(user)
+    };
+    nativeStorage.setUser(enriched);
+  } else {
+    nativeStorage.setUser(null);
+  }
 }
 
 async function request(endpoint, options = {}) {

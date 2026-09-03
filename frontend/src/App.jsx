@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, getStoredUser, setAuthToken, setStoredUser } from './api';
+import { api, getStoredUser, setAuthToken, setStoredUser, checkIsAdmin } from './api';
 import Header from './components/Header';
 import AuthModal from './components/AuthModal';
 import TodayTab from './components/TodayTab';
@@ -44,6 +44,14 @@ export default function App() {
 
     // 2. Initialize user session & check notification prompt eligibility
     initSession();
+
+    // 3. Direct URL / Query deep-linking to Admin Modal (?tab=admin or ?admin=true or #admin)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'admin' || params.get('admin') === 'true' || params.get('admin') === '1' || window.location.hash === '#admin') {
+        setShowAdminModal(true);
+      }
+    } catch {}
   }, []);
 
   // 3. Live in-app reminder scheduler for active browser tabs & PWAs
@@ -128,8 +136,12 @@ export default function App() {
       ]);
 
       if (userData && userData.user) {
-        setUser(userData.user);
-        setStoredUser(userData.user);
+        const u = {
+          ...userData.user,
+          is_admin: checkIsAdmin(userData.user)
+        };
+        setUser(u);
+        setStoredUser(u);
         if (summaryData) {
           setSummary(summaryData);
           try {
@@ -178,9 +190,22 @@ export default function App() {
   };
 
   const handleAuthSuccess = (authenticatedUser) => {
-    setUser(authenticatedUser);
+    const u = {
+      ...authenticatedUser,
+      is_admin: checkIsAdmin(authenticatedUser)
+    };
+    setUser(u);
+    setStoredUser(u);
     loadSummary();
     checkNotificationPromptEligibility();
+    if (checkIsAdmin(u)) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('admin') === 'true' || params.get('tab') === 'admin' || window.location.hash === '#admin') {
+          setShowAdminModal(true);
+        }
+      } catch {}
+    }
   };
 
   const handleLogout = () => {
@@ -298,12 +323,13 @@ export default function App() {
               {activeTab === 'forecast' && <div className="tab-indicator" />}
             </button>
 
-            {(user?.is_admin || (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))) && (
+            {checkIsAdmin(user) && (
               <button
                 type="button"
                 className="tab-btn"
                 onClick={() => setShowAdminModal(true)}
                 style={{ color: 'var(--accent-gold, #d97706)', fontWeight: 700 }}
+                title="Open Administrator Center"
               >
                 <ShieldCheck size={18} />
                 <span>Admin</span>
@@ -337,7 +363,7 @@ export default function App() {
           />
 
           {/* Admin Modal (Restricted to Authorized Admins) */}
-          {(user?.is_admin || (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))) && (
+          {checkIsAdmin(user) && (
             <AdminModal
               isOpen={showAdminModal}
               onClose={() => setShowAdminModal(false)}

@@ -1,11 +1,9 @@
 import React from 'react';
 import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell, ShieldCheck, GraduationCap } from 'lucide-react';
+import { checkIsAdmin } from '../api';
 
 export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onOpenReminders, onOpenAdmin, onLogout }) {
-  const isAdmin = Boolean(
-    user?.is_admin ||
-    (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))
-  );
+  const isAdmin = checkIsAdmin(user);
 
   return (
     <header className="ledger-header">

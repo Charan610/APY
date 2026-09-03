@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, setAuthToken, setStoredUser } from '../api';
 import TimetableBuilder from './TimetableBuilder';
-import { User, Lock, BookOpen, AlertCircle, CheckCircle2, GraduationCap } from 'lucide-react';
+import { User, Lock, BookOpen, AlertCircle, CheckCircle2, GraduationCap, ShieldCheck } from 'lucide-react';
 
 export default function AuthModal({ onAuthSuccess }) {
   const DEFAULT_SECTIONS = [
@@ -210,6 +210,46 @@ export default function AuthModal({ onAuthSuccess }) {
             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }} disabled={loading}>
               {loading ? 'Authenticating...' : 'Access ATT PER Y'}
             </button>
+
+            {/* Administrator Portal Notice & Quick Fill */}
+            <div style={{
+              marginTop: '1rem',
+              padding: '0.65rem 0.85rem',
+              background: 'var(--accent-gold-bg, rgba(217, 119, 6, 0.08))',
+              border: '1px solid var(--accent-gold, #d97706)',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <ShieldCheck size={18} color="var(--accent-gold, #d97706)" />
+                <div style={{ fontSize: '0.75rem', color: 'var(--ink)' }}>
+                  <div style={{ fontWeight: 700 }}>Administrator Portal</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)' }}>Student PIN resets & live app adoption</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '0.25rem 0.55rem',
+                  borderColor: 'var(--accent-gold, #d97706)',
+                  color: 'var(--accent-gold, #d97706)',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap'
+                }}
+                onClick={() => {
+                  setRegNo('23B91A05C0');
+                  setPin('1234');
+                  setError('');
+                }}
+              >
+                Fill Admin PIN
+              </button>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleRegister}>

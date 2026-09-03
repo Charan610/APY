@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, getStoredUser, setAuthToken, setStoredUser } from './api';
+import { api, getStoredUser, setAuthToken, setStoredUser, checkIsAdmin } from './api';
 import { nativeStorage } from './nativeStorage';
 import Header from './components/Header';
 import AuthModal from './components/AuthModal';
@@ -112,10 +112,7 @@ export default function App() {
       if (userData && userData.user) {
         const u = {
           ...userData.user,
-          is_admin: Boolean(
-            userData.user.is_admin ||
-            (userData.user.register_number && ['25B91A05D8', '23B91A05C0'].includes(userData.user.register_number.trim().toUpperCase()))
-          )
+          is_admin: checkIsAdmin(userData.user)
         };
         setUser(u);
         setStoredUser(u);
@@ -177,10 +174,7 @@ export default function App() {
   const handleAuthSuccess = (authenticatedUser) => {
     const u = {
       ...authenticatedUser,
-      is_admin: Boolean(
-        authenticatedUser.is_admin ||
-        (authenticatedUser.register_number && ['25B91A05D8', '23B91A05C0'].includes(authenticatedUser.register_number.trim().toUpperCase()))
-      )
+      is_admin: checkIsAdmin(authenticatedUser)
     };
     setUser(u);
     setStoredUser(u);
@@ -214,10 +208,7 @@ export default function App() {
     );
   }
 
-  const isAdmin = Boolean(
-    user?.is_admin ||
-    (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))
-  );
+  const isAdmin = checkIsAdmin(user);
 
   return (
     <div className="app-viewport" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}>

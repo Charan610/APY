@@ -212,7 +212,7 @@ def touch_login_session(user_id: int, token: Optional[str] = None, platform: Opt
         pass
 
 def get_admin_register_numbers() -> set:
-    raw = os.environ.get("ADMIN_REGISTER_NUMBERS", "25B91A05D8,23B91A05C0")
+    raw = os.environ.get("ADMIN_REGISTER_NUMBERS", "25B91A05D8,23B91A05C0,23B91A0588,23B91A0577")
     return {r.strip().upper() for r in raw.split(",") if r.strip()}
 
 def is_admin_user(register_number: Optional[str], is_admin: Optional[bool] = False) -> bool:

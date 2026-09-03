@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, getApiBase, setApiBase } from '../api';
+import { api, getApiBase, setApiBase, checkIsAdmin } from '../api';
 import {
   requestNotificationPermissionAndSubscribe,
   ensureActivePushSubscription,
@@ -57,10 +57,7 @@ const DEFAULT_SECTIONS = [
 ];
 
 export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, onOpenAdmin, initialTab = 'profile' }) {
-  const isAdmin = Boolean(
-    user?.is_admin ||
-    (user?.register_number && ['25B91A05D8', '23B91A05C0'].includes(user.register_number.trim().toUpperCase()))
-  );
+  const isAdmin = checkIsAdmin(user);
   const [activeTab, setActiveTab] = useState(initialTab || 'profile');
 
   // Profile & Baseline state

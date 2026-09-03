@@ -25,14 +25,36 @@ export function setAuthToken(token) {
   }
 }
 
+export const ADMIN_REGISTER_NUMBERS = ['25B91A05D8', '23B91A05C0', '23B91A0588', '23B91A0577'];
+
+export function checkIsAdmin(user) {
+  if (!user) return false;
+  if (user.is_admin === true || user.is_admin === 1 || user.is_admin === 'true') return true;
+  const reg = (user.register_number || '').trim().toUpperCase();
+  return ADMIN_REGISTER_NUMBERS.includes(reg);
+}
+
 export function getStoredUser() {
-  const user = localStorage.getItem('attendance_user');
-  return user ? JSON.parse(user) : null;
+  const userStr = localStorage.getItem('attendance_user');
+  if (!userStr) return null;
+  try {
+    const user = JSON.parse(userStr);
+    if (user && typeof user === 'object') {
+      user.is_admin = checkIsAdmin(user);
+    }
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 export function setStoredUser(user) {
   if (user) {
-    localStorage.setItem('attendance_user', JSON.stringify(user));
+    const enrichedUser = {
+      ...user,
+      is_admin: checkIsAdmin(user)
+    };
+    localStorage.setItem('attendance_user', JSON.stringify(enrichedUser));
   } else {
     localStorage.removeItem('attendance_user');
   }
