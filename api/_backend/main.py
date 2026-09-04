@@ -45,11 +45,17 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1",
+    "https://127.0.0.1",
     "https://att-per-y.vercel.app",
     "https://apy-attendance.vercel.app",
+    "https://apy-i1s1.vercel.app",
+    "https://apy-mu.vercel.app",
     "capacitor://localhost",
+    "ionic://localhost",
     "https://localhost",
     "http://localhost",
+    "null",
 ]
 custom_origins = os.environ.get("ALLOWED_ORIGINS", "")
 if custom_origins:
@@ -72,11 +78,12 @@ import traceback
 
 @app.middleware("http")
 async def security_and_https_middleware(request: Request, call_next):
-    # Production HTTPS enforcement
-    proto = request.headers.get("x-forwarded-proto")
-    if proto == "http" and (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")):
-        url = request.url.replace(scheme="https")
-        return RedirectResponse(url=str(url), status_code=301)
+    # Production HTTPS enforcement: only redirect GET/HEAD web page requests, never preflight OPTIONS or API routes
+    if request.method not in ["OPTIONS", "POST", "PUT", "DELETE", "PATCH"] and not request.url.path.startswith("/api"):
+        proto = request.headers.get("x-forwarded-proto")
+        if proto == "http" and (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")):
+            url = request.url.replace(scheme="https")
+            return RedirectResponse(url=str(url), status_code=301)
         
     response = await call_next(request)
     # Security hardening transport headers

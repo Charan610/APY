@@ -78,7 +78,7 @@ export function setStoredUser(user) {
   }
 }
 
-async function request(endpoint, options = {}) {
+async function request(endpoint, options = {}, retried = false) {
   const token = getAuthToken();
   const baseUrl = getApiBase();
   const platform = getClientPlatform();
@@ -101,8 +101,16 @@ async function request(endpoint, options = {}) {
     }
     return data;
   } catch (err) {
+    // Retry once for transient network drops on mobile
+    if (!retried && (options.method === 'GET' || !options.method || options.method === 'POST') && (err.name === 'TypeError' || err.message?.toLowerCase().includes('fetch'))) {
+      await new Promise(r => setTimeout(r, 600));
+      return request(endpoint, options, true);
+    }
     if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
-      throw new Error(`Cannot connect to server at ${baseUrl}. Please check your server URL or internet connection.`);
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        throw new Error(`Device is currently offline. Please check your mobile data or Wi-Fi connection.`);
+      }
+      throw new Error(`Cannot connect to server at ${baseUrl}. Please check your internet connection or try again.`);
     }
     throw err;
   }
