@@ -11,6 +11,7 @@ import SettingsModal from './components/SettingsModal';
 import NotificationPromptModal from './components/NotificationPromptModal';
 import AdminModal from './components/AdminModal';
 import { registerServiceWorker } from './notifications';
+import { checkForAppUpdate } from './updateChecker';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -19,6 +20,13 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
+  const [hasUpdate, setHasUpdate] = useState(() => {
+    try {
+      return localStorage.getItem('apy_has_update_badge') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [summary, setSummary] = useState(() => {
     try {
       const cached = localStorage.getItem('apy_summary_cache');
@@ -75,6 +83,15 @@ export default function App() {
     return () => {
       backListener.then(l => l.remove()).catch(() => {});
     };
+  }, []);
+
+  useEffect(() => {
+    // Silent, non-blocking update check on launch
+    checkForAppUpdate().then((res) => {
+      if (res?.hasUpdate) {
+        setHasUpdate(true);
+      }
+    }).catch(() => {});
   }, []);
 
   const triggerHaptic = async () => {
@@ -238,6 +255,7 @@ export default function App() {
               setShowAdminModal(true);
             }}
             onLogout={handleLogout}
+            hasUpdate={hasUpdate}
           />
 
           <main>

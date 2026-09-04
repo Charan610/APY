@@ -31,8 +31,18 @@ import {
   Download,
   Activity,
   Check,
-  Copy
+  Copy,
+  RefreshCw,
+  Sparkles,
+  ArrowUpCircle,
+  FileText
 } from 'lucide-react';
+import {
+  CURRENT_APP_VERSION,
+  CURRENT_APP_BUILD_DATE,
+  checkForAppUpdate,
+  installAppUpdate
+} from '../updateChecker';
 
 const GithubIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -104,6 +114,15 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
+
+  // In-App Update Checker State
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatusMsg, setUpdateStatusMsg] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const [downloadPercent, setDownloadPercent] = useState(0);
+  const [downloadError, setDownloadError] = useState('');
+  const [installStatus, setInstallStatus] = useState('');
 
   // Close on Escape key
   useEffect(() => {
@@ -461,22 +480,56 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
-      setError('Please type DELETE exactly to confirm account erasure.');
-      return;
-    }
-    setDeletingAccount(true);
-    setError('');
+  const handleCheckUpdate = async (force = true) => {
+    setCheckingUpdate(true);
+    setUpdateStatusMsg('');
+    setDownloadError('');
     try {
-      await api.deleteMyAccount();
-      localStorage.clear();
-      window.location.reload();
-    } catch (err) {
-      setError(err.message || 'Failed to erase account.');
-      setDeletingAccount(false);
+      const res = await checkForAppUpdate(force);
+      setUpdateInfo(res);
+      if (res?.hasUpdate) {
+        setUpdateStatusMsg(`New version v${res.latestVersion} is available!`);
+      } else {
+        setUpdateStatusMsg(`You are up to date with the latest release.`);
+      }
+    } catch (e) {
+      setUpdateStatusMsg('Could not check for updates. Please check your internet connection.');
+    } finally {
+      setCheckingUpdate(false);
     }
   };
+
+  const handleInstallUpdate = async () => {
+    if (!updateInfo?.apkUrl) return;
+    setDownloading(true);
+    setDownloadPercent(0);
+    setDownloadError('');
+    setInstallStatus('Initiating update package download...');
+
+    try {
+      const res = await installAppUpdate(updateInfo.apkUrl, (progress) => {
+        if (progress && progress.percent !== undefined) {
+          const p = progress.percent >= 0 ? progress.percent : 50;
+          setDownloadPercent(p);
+          setInstallStatus(`Downloading update... ${p}%`);
+        }
+      });
+      if (res?.status === 'prompted') {
+        setInstallStatus('Download complete! Opening Android package installer...');
+      }
+    } catch (err) {
+      setDownloadError(err.message || 'Download failed. Please try again.');
+      setInstallStatus('');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'about' && !updateInfo && !checkingUpdate) {
+      handleCheckUpdate(false);
+    }
+  }, [isOpen, activeTab]);
 
   if (!isOpen) return null;
 
@@ -670,12 +723,24 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               padding: '0.45rem 0.4rem',
               fontSize: '0.75rem',
               fontWeight: activeTab === 'about' ? 700 : 500,
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              position: 'relative'
             }}
             onClick={() => { setActiveTab('about'); setMsg(''); setError(''); }}
           >
             <Info size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
             About
+            {updateInfo?.hasUpdate && (
+              <span style={{
+                position: 'absolute',
+                top: '3px',
+                right: '4px',
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: '#ea580c'
+              }} />
+            )}
           </button>
         </div>
 
@@ -1384,7 +1449,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               border: '1px solid var(--rule)',
               borderRadius: 'var(--radius-md)',
               padding: '1.25rem 1rem',
-              marginBottom: '1rem',
+              marginBottom: '0.85rem',
               textAlign: 'center'
             }}>
               <div style={{
@@ -1405,11 +1470,181 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                 APY (ATT PER Y)
               </h4>
               <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.2rem' }}>
-                Version <span style={{ color: 'var(--accent-gold, #d97706)', fontWeight: 700 }}>1.2.0</span> · Mobile Edition
+                Installed Version <span style={{ color: 'var(--accent-gold, #d97706)', fontWeight: 700 }}>v{CURRENT_APP_VERSION}</span> · {CURRENT_APP_BUILD_DATE}
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', marginTop: '0.5rem', lineHeight: 1.45 }}>
                 Multi-user collegiate attendance ledger, 75% bunk limit forecaster, baseline onboarding, and native daily attendance reminder alarms.
               </p>
+            </div>
+
+            {/* In-App Update Checker Card */}
+            <div style={{
+              background: updateInfo?.hasUpdate ? 'rgba(234, 88, 12, 0.06)' : 'var(--surface)',
+              border: `1px solid ${updateInfo?.hasUpdate ? 'rgba(234, 88, 12, 0.35)' : 'var(--rule)'}`,
+              borderRadius: 'var(--radius-md)',
+              padding: '0.9rem',
+              marginBottom: '0.85rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <ArrowUpCircle size={17} color={updateInfo?.hasUpdate ? '#ea580c' : 'var(--accent-gold, #d97706)'} />
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--ink)' }}>
+                    In-App Update Checker
+                  </span>
+                </div>
+                {updateInfo?.hasUpdate && (
+                  <span style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    color: '#c2410c',
+                    background: 'rgba(234, 88, 12, 0.15)',
+                    padding: '0.15rem 0.45rem',
+                    borderRadius: '999px',
+                    letterSpacing: '0.5px'
+                  }}>
+                    UPDATE AVAILABLE
+                  </span>
+                )}
+              </div>
+
+              {/* Status or Result Message */}
+              {checkingUpdate ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0', fontSize: '0.78rem', color: 'var(--ink-soft)' }}>
+                  <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span>Checking GitHub for newer releases...</span>
+                </div>
+              ) : updateInfo?.hasUpdate ? (
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--ink)', marginBottom: '0.4rem', fontWeight: 600 }}>
+                    A newer release <strong style={{ color: '#ea580c' }}>v{updateInfo.latestVersion}</strong> is available to install.
+                  </div>
+                  {updateInfo.releaseNotes && (
+                    <div style={{
+                      background: 'var(--surface-alt)',
+                      border: '1px solid var(--rule)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.55rem 0.7rem',
+                      fontSize: '0.72rem',
+                      color: 'var(--ink-soft)',
+                      maxHeight: '90px',
+                      overflowY: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'var(--font-mono)',
+                      marginBottom: '0.65rem'
+                    }}>
+                      <div style={{ fontWeight: 700, color: 'var(--ink)', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <FileText size={12} /> Release Notes ({updateInfo.tag}):
+                      </div>
+                      {updateInfo.releaseNotes}
+                    </div>
+                  )}
+
+                  {/* Download Progress Bar */}
+                  {downloading && (
+                    <div style={{ marginBottom: '0.65rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--ink-soft)', marginBottom: '0.25rem' }}>
+                        <span>{installStatus || 'Downloading APK package...'}</span>
+                        <span style={{ fontWeight: 700 }}>{downloadPercent > 0 ? `${downloadPercent}%` : ''}</span>
+                      </div>
+                      <div style={{
+                        width: '100%',
+                        height: '7px',
+                        background: 'var(--surface-alt)',
+                        borderRadius: '999px',
+                        overflow: 'hidden',
+                        border: '1px solid var(--rule)'
+                      }}>
+                        <div style={{
+                          width: `${Math.max(downloadPercent, 5)}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #d97706, #ea580c)',
+                          transition: 'width 0.2s ease',
+                          borderRadius: '999px'
+                        }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {downloadError && (
+                    <div style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#dc2626',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.45rem 0.6rem',
+                      fontSize: '0.72rem',
+                      marginBottom: '0.5rem'
+                    }}>
+                      {downloadError}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.2rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleInstallUpdate}
+                      disabled={downloading}
+                      style={{
+                        flex: 1,
+                        padding: '0.6rem',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        background: 'linear-gradient(135deg, #d97706, #ea580c)',
+                        borderColor: '#ea580c',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        cursor: downloading ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <Download size={15} />
+                      {downloading ? 'Downloading APK...' : `Update Now to v${updateInfo.latestVersion}`}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleCheckUpdate(true)}
+                      disabled={downloading || checkingUpdate}
+                      style={{ padding: '0.6rem', fontSize: '0.75rem', fontWeight: 600 }}
+                      title="Re-check releases"
+                    >
+                      <RefreshCw size={13} />
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--ink-soft)', marginTop: '0.35rem', textAlign: 'center' }}>
+                    Android will show an install confirmation prompt. Tap "Install" or "Update" to complete.
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0 0.45rem', fontSize: '0.76rem', color: '#16a34a', fontWeight: 600 }}>
+                    <CheckCircle2 size={15} color="#16a34a" />
+                    <span>You're on the latest version (v{CURRENT_APP_VERSION}).</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => handleCheckUpdate(true)}
+                    disabled={checkingUpdate}
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <RefreshCw size={13} className={checkingUpdate ? 'spin' : ''} />
+                    <span>Check for updates</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginBottom: '1rem' }}>

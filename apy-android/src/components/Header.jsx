@@ -2,7 +2,7 @@ import React from 'react';
 import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell, ShieldCheck, GraduationCap } from 'lucide-react';
 import { checkIsAdmin } from '../api';
 
-export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onOpenReminders, onOpenAdmin, onLogout }) {
+export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onOpenReminders, onOpenAdmin, onLogout, hasUpdate = false }) {
   const isAdmin = checkIsAdmin(user);
 
   return (
@@ -110,8 +110,26 @@ export default function Header({ user, activeTab, onSelectTab, onOpenSettings, o
             background: 'var(--accent-gold)'
           }} />
         </button>
-        <button type="button" className="btn-icon" onClick={onOpenSettings} title="Settings & Baseline">
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={onOpenSettings}
+          title="Settings & Baseline"
+          style={{ position: 'relative' }}
+        >
           <Settings size={18} />
+          {hasUpdate && (
+            <span style={{
+              position: 'absolute',
+              top: '4px',
+              right: '4px',
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              background: '#ea580c',
+              boxShadow: '0 0 4px #ea580c'
+            }} />
+          )}
         </button>
         <button type="button" className="btn-icon" onClick={onLogout} title="Logout">
           <LogOut size={18} />

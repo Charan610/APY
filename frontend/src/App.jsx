@@ -10,10 +10,18 @@ import SettingsModal from './components/SettingsModal';
 import NotificationPromptModal from './components/NotificationPromptModal';
 import AdminModal from './components/AdminModal';
 import { registerServiceWorker } from './notifications';
+import { checkForAppUpdate } from './updateChecker';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
+  const [hasUpdate, setHasUpdate] = useState(() => {
+    try {
+      return localStorage.getItem('apy_has_update_badge') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [summary, setSummary] = useState(() => {
     try {
       const cached = localStorage.getItem('apy_summary_cache');
@@ -52,6 +60,13 @@ export default function App() {
         setShowAdminModal(true);
       }
     } catch {}
+
+    // 4. Silent, non-blocking update check
+    checkForAppUpdate().then((res) => {
+      if (res?.hasUpdate) {
+        setHasUpdate(true);
+      }
+    }).catch(() => {});
   }, []);
 
   // 3. Live in-app reminder scheduler for active browser tabs & PWAs
@@ -253,6 +268,7 @@ export default function App() {
             }}
             onOpenAdmin={() => setShowAdminModal(true)}
             onLogout={handleLogout}
+            hasUpdate={hasUpdate}
           />
 
           <main>
