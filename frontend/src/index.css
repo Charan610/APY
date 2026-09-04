@@ -525,14 +525,16 @@ h1, h2, h3, h4, .heading-ledger {
 .status-pill-btn {
   border: none;
   background: transparent;
-  padding: 0.35rem 0.55rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 700;
   font-family: var(--font-mono);
+  letter-spacing: 0.02em;
   color: var(--ink-soft);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .status-pill-btn.active-present {
@@ -741,3 +743,189 @@ h1, h2, h3, h4, .heading-ledger {
     gap: 0.85rem;
   }
 }
+
+/* Continuous Multi-Day Forecasting System */
+.forecast-view-switch {
+  display: flex;
+  background: var(--surface-alt);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 4px;
+  margin-bottom: 1rem;
+}
+
+.forecast-view-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.forecast-view-btn.active {
+  background: var(--ink);
+  color: #FFFFFF;
+  box-shadow: 0 1px 4px rgba(36, 27, 78, 0.15);
+}
+
+.forecast-view-btn.active svg {
+  color: var(--accent-gold);
+}
+
+.subject-pills-container {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.65rem;
+  margin-bottom: 0.85rem;
+  scrollbar-width: none;
+}
+
+.subject-pills-container::-webkit-scrollbar {
+  display: none;
+}
+
+.subject-select-pill {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-full);
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.subject-select-pill:hover {
+  border-color: var(--ink);
+}
+
+.subject-select-pill.active {
+  background: var(--ink);
+  color: #FFFFFF;
+  border-color: var(--ink);
+  box-shadow: 0 2px 6px rgba(36, 27, 78, 0.2);
+}
+
+.subject-select-pill .pill-pct {
+  font-family: var(--font-mono);
+  font-size: 0.725rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.subject-select-pill.active .pill-pct {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+.forecast-preset-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.forecast-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.forecast-day-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  transition: all 0.15s ease;
+}
+
+.forecast-day-card.holiday {
+  background: var(--surface-alt);
+  border-style: dashed;
+  opacity: 0.9;
+}
+
+.forecast-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.forecast-scenarios-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.scenario-card {
+  border: 1px solid var(--rule);
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.scenario-card:hover {
+  border-color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.scenario-card.selected {
+  background: #FFFFFF;
+  border: 2px solid var(--ink);
+  box-shadow: 0 2px 8px rgba(36, 27, 78, 0.15);
+}
+
+.scenario-card .scenario-title {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.25rem;
+}
+
+.scenario-card .scenario-pct {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.scenario-card .scenario-delta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  margin-top: 0.2rem;
+  font-weight: 600;
+}
+

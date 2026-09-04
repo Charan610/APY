@@ -289,7 +289,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
                       onClick={() => handleSetBlockStatus(block.id, 'present')}
                       disabled={!isDateEditable || saving}
                     >
-                      P
+                      PRESENT
                     </button>
                     <button
                       type="button"
@@ -297,15 +297,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
                       onClick={() => handleSetBlockStatus(block.id, 'absent')}
                       disabled={!isDateEditable || saving}
                     >
-                      A
-                    </button>
-                    <button
-                      type="button"
-                      className={`status-pill-btn ${status === 'holiday' ? 'active-holiday' : ''}`}
-                      onClick={() => handleSetBlockStatus(block.id, 'holiday')}
-                      disabled={!isDateEditable || saving}
-                    >
-                      H
+                      ABSENT
                     </button>
                   </div>
                 </div>
