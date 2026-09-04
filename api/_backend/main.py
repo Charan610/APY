@@ -23,13 +23,18 @@ if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME
     except Exception as e:
         print("Scheduler init note:", e)
 
-# Only run schema init and seeding on local startup (production DB is already migrated)
+# Run non-destructive schema migrations on startup (ensures additive tables like revoked_tokens exist on Turso)
+try:
+    init_db()
+except Exception as e:
+    print("Database init notice:", e)
+
+# Seeding is for local dev only
 if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
     try:
-        init_db()
         seed_database()
     except Exception as e:
-        print("Database init note:", e)
+        print("Database seed note:", e)
 
 app = FastAPI(
     title="ATT PER Y API",

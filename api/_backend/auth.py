@@ -214,12 +214,31 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
     with get_db() as conn:
         cursor = conn.cursor()
         # Server-side logout verification
-        cursor.execute("SELECT id FROM revoked_tokens WHERE token_hash = ?", (t_hash,))
-        if cursor.fetchone():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Session has been logged out. Please sign in again."
-            )
+        try:
+            cursor.execute("SELECT id FROM revoked_tokens WHERE token_hash = ?", (t_hash,))
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session has been logged out. Please sign in again."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            err_str = str(e).lower()
+            if "no such table" in err_str and "revoked_tokens" in err_str:
+                try:
+                    cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS revoked_tokens (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        token_hash TEXT UNIQUE NOT NULL,
+                        revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """)
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_revoked_token_hash ON revoked_tokens(token_hash);")
+                except Exception:
+                    pass
+            else:
+                print("Revoked token check notice:", e)
 
         cursor.execute(
             """
@@ -249,18 +268,37 @@ def hash_token(token: str) -> str:
 def revoke_session_token(token: str, db_conn = None):
     """Revokes a session token server-side upon logout, invalidating it immediately."""
     t_hash = hash_token(token)
-    try:
-        if db_conn is not None:
-            cursor = db_conn.cursor()
+    def _do_revoke(cursor):
+        try:
             cursor.execute("INSERT OR IGNORE INTO revoked_tokens (token_hash) VALUES (?)", (t_hash,))
             cursor.execute("DELETE FROM login_sessions WHERE token_hash = ?", (t_hash,))
+        except Exception as e:
+            err_str = str(e).lower()
+            if "no such table" in err_str and "revoked_tokens" in err_str:
+                try:
+                    cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS revoked_tokens (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        token_hash TEXT UNIQUE NOT NULL,
+                        revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """)
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_revoked_token_hash ON revoked_tokens(token_hash);")
+                    cursor.execute("INSERT OR IGNORE INTO revoked_tokens (token_hash) VALUES (?)", (t_hash,))
+                    cursor.execute("DELETE FROM login_sessions WHERE token_hash = ?", (t_hash,))
+                except Exception:
+                    pass
+            else:
+                print("Revoke session notice:", e)
+
+    try:
+        if db_conn is not None:
+            _do_revoke(db_conn.cursor())
         else:
             with get_db() as conn:
-                cursor = conn.cursor()
-                cursor.execute("INSERT OR IGNORE INTO revoked_tokens (token_hash) VALUES (?)", (t_hash,))
-                cursor.execute("DELETE FROM login_sessions WHERE token_hash = ?", (t_hash,))
+                _do_revoke(conn.cursor())
     except Exception as e:
-        print("Revoke session notice:", e)
+        print("Revoke session outer notice:", e)
 
 def record_login_session(user_id: int, platform: Optional[str], token: str, db_conn=None):
     """Records a new or refreshed login session tagged by platform (web, android, ios)."""

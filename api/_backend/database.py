@@ -251,7 +251,14 @@ _local_schema_initialized = False
 def get_db_connection():
     global _local_schema_initialized
     if is_turso_configured():
-        return TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+        conn = TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+        if not _local_schema_initialized:
+            _local_schema_initialized = True
+            try:
+                init_db()
+            except Exception as e:
+                logger.warning(f"Turso auto-init schema notice: {e}")
+        return conn
     else:
         conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -477,9 +484,8 @@ def log_admin_action(
     db_conn = None
 ):
     """Securely logs an administrative action in the admin_audit_logs table."""
-    try:
-        if db_conn is not None:
-            cursor = db_conn.cursor()
+    def _do_insert(cursor):
+        try:
             cursor.execute(
                 """
                 INSERT INTO admin_audit_logs (admin_register_number, action, target, details, ip_address)
@@ -487,18 +493,42 @@ def log_admin_action(
                 """,
                 (admin_reg, action, target, details, ip_address)
             )
+        except Exception as e:
+            err_str = str(e).lower()
+            if "no such table" in err_str and "admin_audit_logs" in err_str:
+                try:
+                    cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        admin_register_number TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        target TEXT,
+                        details TEXT,
+                        ip_address TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """)
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_logs(admin_register_number);")
+                    cursor.execute(
+                        """
+                        INSERT INTO admin_audit_logs (admin_register_number, action, target, details, ip_address)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (admin_reg, action, target, details, ip_address)
+                    )
+                except Exception as ex:
+                    logger.warning(f"Admin audit auto-create table notice: {ex}")
+            else:
+                logger.warning(f"Admin audit logging notice: {e}")
+
+    try:
+        if db_conn is not None:
+            _do_insert(db_conn.cursor())
         else:
             with get_db() as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO admin_audit_logs (admin_register_number, action, target, details, ip_address)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (admin_reg, action, target, details, ip_address)
-                )
+                _do_insert(conn.cursor())
     except Exception as e:
-        logger.warning(f"Admin audit logging notice: {e}")
+        logger.warning(f"Admin audit logging outer notice: {e}")
 
 def cleanup_inactive_users(retention_days: int = 730, db_conn = None) -> int:
     """DPDP Act 2023 Data Retention Policy: Cleans up accounts inactive for more than retention_days (default: 2 years)."""
