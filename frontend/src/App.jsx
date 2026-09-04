@@ -209,6 +209,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    try {
+      api.logout();
+    } catch {}
     setAuthToken(null);
     setStoredUser(null);
     setUser(null);

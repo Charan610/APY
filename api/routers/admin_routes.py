@@ -1,10 +1,17 @@
 import secrets
-from fastapi import APIRouter, HTTPException, Depends, status, Query
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, Depends, status, Query, Request
 from pydantic import BaseModel, Field, field_validator
-from database import get_db
-from auth import hash_pin, get_current_admin_user
+from database import get_db, log_admin_action
+from auth import hash_pin, get_current_admin_user, check_admin_reset_rate_limit
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
 
 class ResetPinRequest(BaseModel):
     target_register_number: str = Field(..., min_length=3, max_length=20)
@@ -25,12 +32,87 @@ class ResetPinRequest(BaseModel):
             return clean
         return None
 
+@router.get("/users")
+def get_admin_users(
+    request: Request,
+    limit: int = Query(200, ge=1, le=1000),
+    admin_user: dict = Depends(get_current_admin_user)
+):
+    admin_reg = admin_user.get("register_number", "ADMIN")
+    client_ip = get_client_ip(request)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT 
+                u.id, 
+                u.register_number, 
+                COALESCE(s.branch, 'CSE') as branch, 
+                COALESCE(s.section_label, '?') as section_label,
+                u.baseline_attended, 
+                u.baseline_total, 
+                u.baseline_date,
+                u.created_at,
+                COUNT(d.id) as logged_periods
+            FROM users u
+            LEFT JOIN sections s ON u.section_id = s.id
+            LEFT JOIN daily_logs d ON u.id = d.user_id
+            GROUP BY u.id
+            ORDER BY u.register_number ASC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        
+        users_list = []
+        for r in rows:
+            u_dict = dict(r)
+            try:
+                cursor.execute(
+                    """
+                    SELECT platform, last_seen_at
+                    FROM login_sessions
+                    WHERE user_id = ?
+                    ORDER BY last_seen_at DESC
+                    LIMIT 1
+                    """,
+                    (u_dict["id"],)
+                )
+                sess = cursor.fetchone()
+                if sess:
+                    u_dict["last_seen_at"] = sess["last_seen_at"]
+                    u_dict["last_platform"] = sess["platform"]
+                else:
+                    u_dict["last_seen_at"] = None
+                    u_dict["last_platform"] = None
+            except Exception:
+                u_dict["last_seen_at"] = None
+                u_dict["last_platform"] = None
+            users_list.append(u_dict)
+
+        log_admin_action(
+            admin_reg=admin_reg,
+            action="VIEW_ALL_USERS",
+            details=f"Retrieved {len(users_list)} registered users",
+            ip_address=client_ip,
+            db_conn=conn
+        )
+            
+        return {
+            "users": users_list,
+            "count": len(users_list)
+        }
+
 @router.get("/search")
 def search_student(
+    request: Request,
     register_number: str = Query(..., min_length=2, description="Student register number to search"),
     admin_user: dict = Depends(get_current_admin_user)
 ):
     reg_clean = register_number.strip().upper()
+    admin_reg = admin_user.get("register_number", "ADMIN")
+    client_ip = get_client_ip(request)
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -78,6 +160,15 @@ def search_student(
                 user_dict["recent_sessions"] = []
             return user_dict
 
+        log_admin_action(
+            admin_reg=admin_reg,
+            action="SEARCH_STUDENT",
+            target=reg_clean,
+            details=f"Searched student {reg_clean}",
+            ip_address=client_ip,
+            db_conn=conn
+        )
+
         if not row:
             # Also attempt prefix search if exact match not found
             cursor.execute(
@@ -120,9 +211,16 @@ def search_student(
 @router.post("/reset-pin")
 def reset_student_pin(
     req: ResetPinRequest,
+    request: Request,
     admin_user: dict = Depends(get_current_admin_user)
 ):
     target_reg = req.target_register_number
+    admin_reg = admin_user.get("register_number", "ADMIN")
+    client_ip = get_client_ip(request)
+
+    # Security: Rate limit admin resets per admin & per IP
+    check_admin_reset_rate_limit(admin_reg, client_ip)
+
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -157,13 +255,22 @@ def reset_student_pin(
         )
 
         # Log action in pin_reset_log
-        admin_reg = admin_user.get("register_number", "ADMIN")
         cursor.execute(
             """
             INSERT INTO pin_reset_log (target_register_number, reset_by_register_number)
             VALUES (?, ?)
             """,
             (target_reg, admin_reg)
+        )
+
+        # Log action in comprehensive admin_audit_logs (NEVER storing raw PIN)
+        log_admin_action(
+            admin_reg=admin_reg,
+            action="RESET_PIN",
+            target=target_reg,
+            details=f"PIN reset successfully ({'custom' if req.custom_pin else 'random'} 6-digit)",
+            ip_address=client_ip,
+            db_conn=conn
         )
 
         return {
@@ -186,6 +293,27 @@ def get_reset_logs(
             """
             SELECT id, target_register_number, reset_by_register_number, reset_at
             FROM pin_reset_log
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        return {
+            "logs": [dict(r) for r in rows] if rows else []
+        }
+
+@router.get("/audit-logs")
+def get_admin_audit_logs(
+    limit: int = Query(50, ge=1, le=200),
+    admin_user: dict = Depends(get_current_admin_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, admin_register_number, action, target, details, ip_address, created_at
+            FROM admin_audit_logs
             ORDER BY id DESC
             LIMIT ?
             """,

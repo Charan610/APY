@@ -198,7 +198,7 @@ def seed_database():
                     """,
                     (test_reg, pin_hash, sec_c_id, 193, 262, "2026-08-24")
                 )
-                print(f"Seeded tester user {test_reg} (PIN: 1234) for Section C with baseline 193/262 (2026-08-24)")
+                print(f"Seeded tester user {test_reg} for Section C with baseline 193/262 (2026-08-24)")
 
 if __name__ == "__main__":
     seed_database()

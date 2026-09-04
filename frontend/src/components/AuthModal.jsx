@@ -33,6 +33,9 @@ export default function AuthModal({ onAuthSuccess }) {
   const [baselineTotal, setBaselineTotal] = useState('');
   const [baselineDate, setBaselineDate] = useState('2026-08-24');
 
+  // DPDP Act 2023 Explicit Consent
+  const [dpdpConsent, setDpdpConsent] = useState(false);
+
   useEffect(() => {
     loadSections();
   }, []);
@@ -106,11 +109,17 @@ export default function AuthModal({ onAuthSuccess }) {
       return;
     }
 
+    if (!dpdpConsent) {
+      setError('You must agree to the DPDP Act 2023 consent notice to create an account.');
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
         register_number: regNo.trim(),
         pin: pin.trim(),
+        dpdp_consent: true,
         baseline_attended: bAtt,
         baseline_total: bTot,
         baseline_date: bTot > 0 ? baselineDate : null
@@ -400,8 +409,54 @@ export default function AuthModal({ onAuthSuccess }) {
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1.25rem' }} disabled={loading}>
-              {loading ? 'Creating Account...' : 'Complete Registration'}
+            {/* DPDP Act 2023 Privacy Notice & Consent */}
+            <div style={{
+              background: 'var(--surface-alt)',
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem',
+              marginTop: '1rem',
+              marginBottom: '0.5rem',
+              fontSize: '0.78rem',
+              lineHeight: '1.45'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.4rem' }}>
+                <ShieldCheck size={16} style={{ color: 'var(--accent-gold, #d97706)' }} />
+                <span>DPDP Act 2023 Privacy Notice & Consent</span>
+              </div>
+              <div style={{ color: 'var(--ink-soft)', marginBottom: '0.65rem' }}>
+                <strong>Data Collected:</strong> Register number, section, baseline and daily attendance logs.<br />
+                <strong>Purpose:</strong> Academic tracking, calculating 75% threshold, and FAT forecasting.<br />
+                <strong>Your Rights:</strong> You can view, export, or permanently delete your account & all data anytime in Settings.<br />
+                <strong>Grievance Contact:</strong> grievance@attendance.app
+              </div>
+              <label style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.55rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+                color: 'var(--ink)'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={dpdpConsent}
+                  onChange={(e) => setDpdpConsent(e.target.checked)}
+                  style={{ marginTop: '3px', accentColor: 'var(--accent-gold, #d97706)', cursor: 'pointer' }}
+                />
+                <span>
+                  I agree to the collection and processing of my academic attendance data under the Digital Personal Data Protection Act 2023.
+                </span>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '0.75rem', fontWeight: 700 }}
+              disabled={loading || !dpdpConsent}
+            >
+              {loading ? 'Creating Account...' : 'Agree & Complete Registration'}
             </button>
           </form>
         )}

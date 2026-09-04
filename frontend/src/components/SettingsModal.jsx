@@ -99,6 +99,12 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
   const [serverTestMessage, setServerTestMessage] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // DPDP & Privacy State
+  const [downloadingData, setDownloadingData] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -120,6 +126,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
       setCurrentPin('');
       setNewPin('');
       setConfirmNewPin('');
+      setShowDeleteConfirm(false);
+      setDeleteConfirmText('');
       setServerUrl(getApiBase());
       setServerTestStatus(null);
       setServerTestMessage('');
@@ -430,6 +438,46 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  const handleDownloadMyData = async () => {
+    setDownloadingData(true);
+    setError('');
+    try {
+      const data = await api.getMyData();
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `attendance_data_${user?.register_number || 'student'}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setMsg('Personal data export downloaded per DPDP Act 2023 Right to Access.');
+    } catch (err) {
+      setError(err.message || 'Failed to download data export.');
+    } finally {
+      setDownloadingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      setError('Please type DELETE exactly to confirm account erasure.');
+      return;
+    }
+    setDeletingAccount(true);
+    setError('');
+    try {
+      await api.deleteMyAccount();
+      localStorage.clear();
+      window.location.reload();
+    } catch (err) {
+      setError(err.message || 'Failed to erase account.');
+      setDeletingAccount(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -583,6 +631,21 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           >
             <KeyRound size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
             PIN & Security
+          </button>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'privacy' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              flex: 1.1,
+              padding: '0.45rem 0.4rem',
+              fontSize: '0.75rem',
+              fontWeight: activeTab === 'privacy' ? 700 : 500,
+              whiteSpace: 'nowrap'
+            }}
+            onClick={() => { setActiveTab('privacy'); setMsg(''); setError(''); }}
+          >
+            <ShieldCheck size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
+            Privacy (DPDP)
           </button>
           <button
             type="button"
@@ -1089,7 +1152,164 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           </div>
         )}
 
-        {/* TAB 4: Server Endpoint */}
+        {/* TAB 4: DPDP Act 2023 Privacy & Rights */}
+        {activeTab === 'privacy' && (
+          <div>
+            {/* DPDP Compliance Card */}
+            <div style={{
+              background: 'var(--surface-alt)',
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <ShieldCheck size={18} color="var(--accent-gold, #d97706)" />
+                <strong style={{ fontSize: '0.9rem', color: 'var(--ink)' }}>Digital Personal Data Protection (DPDP) Act 2023</strong>
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', lineHeight: '1.5' }}>
+                Under India's DPDP Act 2023, you are the <strong>Data Principal</strong>. Your academic attendance data is collected and processed under strict data minimization rules solely for calculating attendance requirements and FAT exam forecasts.
+              </div>
+            </div>
+
+            {/* Right to Access & Data Portability */}
+            <div style={{
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem',
+              marginBottom: '1.25rem',
+              background: 'var(--surface)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, fontSize: '0.88rem', color: 'var(--ink)', marginBottom: '0.35rem' }}>
+                <Download size={16} />
+                <span>Right to Access & Portability (Section 11)</span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', margin: '0 0 0.75rem 0' }}>
+                You can download a complete, readable JSON export of all personal data held about you, including your profile, baseline records, daily attendance logs, and active sessions.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleDownloadMyData}
+                disabled={downloadingData}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.5rem 0.85rem', fontWeight: 600 }}
+              >
+                <Download size={14} />
+                <span>{downloadingData ? 'Exporting...' : 'Export & Download My Data (JSON)'}</span>
+              </button>
+            </div>
+
+            {/* Retention & Grievance Contact */}
+            <div style={{
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem',
+              marginBottom: '1.25rem',
+              background: 'var(--surface)'
+            }}>
+              <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--ink)', marginBottom: '0.35rem' }}>
+                Data Retention & Grievance Redressal
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', lineHeight: '1.5' }}>
+                <strong>Retention Policy:</strong> Inactive accounts (no activity for 2 or more academic years) are automatically purged.<br />
+                <strong>Data Protection Grievance Officer:</strong> grievance@attendance.app
+              </div>
+            </div>
+
+            {/* Right to Erasure (Delete Account) */}
+            <div style={{
+              border: '1px solid rgba(220, 38, 38, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem',
+              background: 'rgba(220, 38, 38, 0.04)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, fontSize: '0.88rem', color: '#dc2626', marginBottom: '0.35rem' }}>
+                <Trash2 size={16} />
+                <span>Right to Erasure (Section 12)</span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', margin: '0 0 0.75rem 0' }}>
+                Permanently delete your account, credentials, section info, notification subscriptions, and all daily attendance logs from the server.
+              </p>
+
+              {!showDeleteConfirm ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    color: '#dc2626',
+                    borderColor: '#dc2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.8rem',
+                    padding: '0.45rem 0.8rem',
+                    fontWeight: 600
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete My Account & Data</span>
+                </button>
+              ) : (
+                <div style={{
+                  background: 'var(--surface)',
+                  border: '1px solid #dc2626',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.75rem'
+                }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#dc2626', marginBottom: '0.4rem' }}>
+                    Are you absolutely sure? This action cannot be undone.
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: '0.6rem' }}>
+                    To confirm permanent erasure of all records, type <strong>DELETE</strong> below:
+                  </div>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="Type DELETE to confirm"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.65rem',
+                      fontFamily: 'monospace',
+                      fontSize: '0.85rem',
+                      marginBottom: '0.6rem',
+                      border: '1px solid var(--rule)'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleDeleteAccount}
+                      disabled={deletingAccount || deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                      style={{
+                        background: '#dc2626',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '0.45rem 0.8rem',
+                        fontSize: '0.8rem',
+                        fontWeight: 700
+                      }}
+                    >
+                      {deletingAccount ? 'Erasing Data...' : 'Confirm Permanent Erasure'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
+                      style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: Server Endpoint */}
         {activeTab === 'server' && (
           <div>
             <div style={{

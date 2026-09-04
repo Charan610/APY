@@ -433,8 +433,102 @@ def init_db():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_sessions_user ON login_sessions(user_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_sessions_platform ON login_sessions(platform);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_login_sessions_token ON login_sessions(token_hash);")
+
+            # Admin action audit log table (Additive for DPDP and Security auditing)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_register_number TEXT NOT NULL,
+                action TEXT NOT NULL,
+                target TEXT,
+                details TEXT,
+                ip_address TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_logs(admin_register_number);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_logs(action);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_logs(created_at);")
+
+            # Revoked tokens table (Additive for server-side logout token invalidation)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS revoked_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash TEXT UNIQUE NOT NULL,
+                revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_revoked_token_hash ON revoked_tokens(token_hash);")
+
+            # Safe non-destructive column migration for DPDP consent timestamp
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN consent_given_at TIMESTAMP;")
+            except Exception:
+                pass
     except Exception as e:
         print("Init DB notice:", e)
+
+def log_admin_action(
+    admin_reg: str,
+    action: str,
+    target: Optional[str] = None,
+    details: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    db_conn = None
+):
+    """Securely logs an administrative action in the admin_audit_logs table."""
+    try:
+        if db_conn is not None:
+            cursor = db_conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO admin_audit_logs (admin_register_number, action, target, details, ip_address)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (admin_reg, action, target, details, ip_address)
+            )
+        else:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO admin_audit_logs (admin_register_number, action, target, details, ip_address)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (admin_reg, action, target, details, ip_address)
+                )
+    except Exception as e:
+        logger.warning(f"Admin audit logging notice: {e}")
+
+def cleanup_inactive_users(retention_days: int = 730, db_conn = None) -> int:
+    """DPDP Act 2023 Data Retention Policy: Cleans up accounts inactive for more than retention_days (default: 2 years)."""
+    try:
+        sql = """
+        DELETE FROM users 
+        WHERE id IN (
+            SELECT u.id 
+            FROM users u
+            LEFT JOIN (
+                SELECT user_id, MAX(last_seen_at) as max_seen 
+                FROM login_sessions 
+                GROUP BY user_id
+            ) s ON u.id = s.user_id
+            WHERE datetime(COALESCE(s.max_seen, u.created_at)) < datetime('now', ? || ' days')
+        );
+        """
+        modifier = f"-{retention_days}"
+        if db_conn is not None:
+            cursor = db_conn.cursor()
+            cursor.execute(sql, (modifier,))
+            return cursor.rowcount if hasattr(cursor, "rowcount") else 0
+        else:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql, (modifier,))
+                return cursor.rowcount if hasattr(cursor, "rowcount") else 0
+    except Exception as e:
+        logger.warning(f"Data retention cleanup notice: {e}")
+        return 0
 
 def backup_db() -> str:
     """Creates a timestamped snapshot backup of the SQLite database."""

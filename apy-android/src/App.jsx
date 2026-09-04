@@ -186,6 +186,9 @@ export default function App() {
 
   const handleLogout = async () => {
     triggerHaptic();
+    try {
+      await api.logout();
+    } catch {}
     await nativeStorage.setToken(null);
     await nativeStorage.setUser(null);
     setUser(null);

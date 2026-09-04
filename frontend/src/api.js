@@ -85,7 +85,18 @@ export const api = {
   // Auth
   register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify({ platform: 'web', ...payload }) }),
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify({ platform: 'web', ...payload }) }),
+  logout: async () => {
+    try {
+      await request('/auth/logout', { method: 'POST' });
+    } catch (e) {
+      console.warn('Logout server note:', e);
+    }
+    removeAuthToken();
+    removeStoredUser();
+  },
   getMe: () => request('/auth/me'),
+  getMyData: () => request('/auth/my-data'),
+  deleteMyAccount: () => request('/auth/account', { method: 'DELETE' }),
   updateBaseline: (payload) => request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) }),
   updateSection: (sectionId) => request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) }),
   changePin: (payload) => request('/auth/change-pin', { method: 'PUT', body: JSON.stringify(payload) }),
@@ -107,12 +118,14 @@ export const api = {
 
   // Admin
   triggerBackup: () => request('/admin/backup', { method: 'POST' }),
+  getAdminUsers: (limit = 200) => request(`/admin/users?limit=${limit}`),
   searchStudent: (regNo) => request(`/admin/search?register_number=${encodeURIComponent(regNo)}`),
   resetStudentPin: (regNo, customPin = null) => request('/admin/reset-pin', {
     method: 'POST',
     body: JSON.stringify({ target_register_number: regNo, custom_pin: customPin || null })
   }),
   getAdminResetLogs: (limit = 25) => request(`/admin/reset-logs?limit=${limit}`),
+  getAdminAuditLogs: (limit = 50) => request(`/admin/audit-logs?limit=${limit}`),
   getPlatformStats: () => request('/admin/platform-stats'),
 
   // Daily Reminder Notifications

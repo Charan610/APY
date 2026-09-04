@@ -23,6 +23,8 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   const [searching, setSearching] = useState(false);
   const [student, setStudent] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   
   const [confirmingTarget, setConfirmingTarget] = useState(null);
   const [resetting, setResetting] = useState(false);
@@ -60,13 +62,27 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
       setConfirmingTarget(null);
       setNewGeneratedPin(null);
       setCopied(false);
-      if (activeTab === 'logs') {
+      if (activeTab === 'reset') {
+        loadAllUsers();
+      } else if (activeTab === 'logs') {
         loadLogs();
       } else if (activeTab === 'analytics') {
         loadStats();
       }
     }
   }, [isOpen, activeTab]);
+
+  const loadAllUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const res = await api.getAdminUsers(200);
+      setAllUsers(res.users || []);
+    } catch (err) {
+      console.error('Failed to load registered users:', err);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
 
   const loadStats = async () => {
     setStatsLoading(true);
@@ -411,6 +427,107 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Registered Students Selection List (Fix: Always show registered numbers to select from) */}
+            {!student && matches.length === 0 && (
+              <div style={{
+                background: 'var(--surface-alt)',
+                border: '1px solid var(--rule)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.75rem',
+                marginBottom: '1.25rem'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '0.6rem'
+                }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink)' }}>
+                    Registered Students ({allUsers.length}):
+                  </div>
+                  {usersLoading && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
+                      <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                      <span>Loading students...</span>
+                    </div>
+                  )}
+                </div>
+
+                {allUsers.length === 0 && !usersLoading ? (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', padding: '0.5rem 0', textAlign: 'center' }}>
+                    No registered students found.
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.45rem',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    paddingRight: '2px'
+                  }}>
+                    {(searchQuery.trim()
+                      ? allUsers.filter(u => u.register_number.toUpperCase().includes(searchQuery.trim().toUpperCase()))
+                      : allUsers
+                    ).map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => handleSelectMatch(u)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.55rem 0.75rem',
+                          background: 'var(--surface)',
+                          border: '1px solid var(--rule)',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--accent-gold, #d97706)';
+                          e.currentTarget.style.background = 'var(--surface-hover, #fafafa)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--rule)';
+                          e.currentTarget.style.background = 'var(--surface)';
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.92rem', color: 'var(--ink)' }}>
+                            {u.register_number}
+                          </span>
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.78rem', color: 'var(--ink-soft)' }}>
+                            {u.branch} - Sec {u.section_label}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {u.last_platform && (
+                            <span style={{
+                              fontSize: '0.68rem',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: u.last_platform === 'android' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                              color: u.last_platform === 'android' ? '#16a34a' : '#2563eb',
+                              fontWeight: 600,
+                              textTransform: 'uppercase'
+                            }}>
+                              {u.last_platform}
+                            </span>
+                          )}
+                          <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold, #d97706)', fontWeight: 600 }}>
+                            Select & Reset &rarr;
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

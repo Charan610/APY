@@ -1,14 +1,22 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Header
+from fastapi import APIRouter, HTTPException, Depends, status, Header, Request, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from database import get_db
 from auth import (
     hash_pin, verify_pin, create_access_token, get_current_user,
-    check_rate_limit, record_failed_attempt, clear_rate_limit,
-    is_admin_user, record_login_session, touch_login_session
+    check_login_rate_limit, record_failed_attempt, clear_rate_limit,
+    is_admin_user, record_login_session, touch_login_session,
+    revoke_session_token, security
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
 
 class ChangePinRequest(BaseModel):
     current_pin: str = Field(..., min_length=4, max_length=6)
@@ -41,6 +49,8 @@ class RegisterRequest(BaseModel):
     baseline_attended: Optional[int] = 0
     baseline_total: Optional[int] = 0
     baseline_date: Optional[str] = None
+    # DPDP Act 2023 Explicit Consent
+    dpdp_consent: bool = Field(True, description="Explicit consent under DPDP Act 2023 for academic attendance tracking")
 
     @field_validator("pin")
     @classmethod
@@ -133,11 +143,17 @@ def register(req: RegisterRequest):
                 detail="Baseline total periods cannot be less than baseline attended periods"
             )
 
+        if not req.dpdp_consent:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="DPDP Act 2023 consent is required to process attendance data and create an account."
+            )
+
         pin_hash = hash_pin(req.pin)
         cursor.execute(
             """
-            INSERT INTO users (register_number, pin_hash, section_id, baseline_attended, baseline_total, baseline_date)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (register_number, pin_hash, section_id, baseline_attended, baseline_total, baseline_date, consent_given_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """,
             (req.register_number, pin_hash, section_id, req.baseline_attended or 0, req.baseline_total or 0, req.baseline_date)
         )
@@ -173,8 +189,13 @@ def register(req: RegisterRequest):
         }
 
 @router.post("/login")
-def login(req: LoginRequest, x_client_platform: Optional[str] = Header(None, alias="X-Client-Platform")):
-    check_rate_limit(req.register_number)
+def login(
+    req: LoginRequest,
+    request: Request,
+    x_client_platform: Optional[str] = Header(None, alias="X-Client-Platform")
+):
+    client_ip = get_client_ip(request)
+    check_login_rate_limit(req.register_number, client_ip)
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -192,7 +213,7 @@ def login(req: LoginRequest, x_client_platform: Optional[str] = Header(None, ali
         user = cursor.fetchone()
         
         if not user or not verify_pin(req.pin, user["pin_hash"]):
-            record_failed_attempt(req.register_number)
+            record_failed_attempt(req.register_number, client_ip)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid register number or PIN"
@@ -292,3 +313,97 @@ def update_section(req: UpdateSectionRequest, current_user: dict = Depends(get_c
             "message": f"Section updated to {sec['branch']} - {sec['section_label']}",
             "section": dict(sec)
         }
+
+@router.post("/logout")
+def logout(
+    current_user: dict = Depends(get_current_user),
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
+):
+    """Server-side session invalidation upon user logout."""
+    if credentials and credentials.credentials:
+        revoke_session_token(credentials.credentials)
+    return {
+        "status": "success",
+        "message": "Successfully logged out. Session invalidated on server."
+    }
+
+@router.get("/my-data")
+def get_my_data(current_user: dict = Depends(get_current_user)):
+    """DPDP Act 2023 Right to Access: Provides full export of all personal & academic data stored."""
+    user_id = current_user["id"]
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # 1. Full User record
+        cursor.execute(
+            """
+            SELECT u.id, u.register_number, u.section_id, u.baseline_attended, 
+                   u.baseline_total, u.baseline_date, u.created_at, u.consent_given_at,
+                   s.branch, s.section_label, s.effective_from
+            FROM users u
+            JOIN sections s ON u.section_id = s.id
+            WHERE u.id = ?
+            """,
+            (user_id,)
+        )
+        user_row = cursor.fetchone()
+
+        # 2. Daily logs
+        cursor.execute(
+            """
+            SELECT log_date, block_id, status, updated_at
+            FROM daily_logs
+            WHERE user_id = ?
+            ORDER BY log_date DESC
+            """,
+            (user_id,)
+        )
+        logs = [dict(r) for r in cursor.fetchall()]
+
+        # 3. Notification preferences & times
+        cursor.execute("SELECT enabled, created_at, updated_at FROM notification_preferences WHERE user_id = ?", (user_id,))
+        pref = cursor.fetchone()
+
+        cursor.execute("SELECT time_of_day, label, is_prebuilt FROM notification_times WHERE user_id = ?", (user_id,))
+        times = [dict(r) for r in cursor.fetchall()]
+
+        # 4. Login sessions (anonymized)
+        cursor.execute("SELECT platform, created_at, last_seen_at FROM login_sessions WHERE user_id = ?", (user_id,))
+        sessions = [dict(r) for r in cursor.fetchall()]
+
+        return {
+            "dpdp_notice": "Personal data stored solely for calculating academic attendance under DPDP Act 2023.",
+            "data_fiduciary_contact": "grievance@attendance.app",
+            "profile": dict(user_row) if user_row else {},
+            "daily_logs": logs,
+            "daily_logs_count": len(logs),
+            "notification_preferences": dict(pref) if pref else {"enabled": False},
+            "notification_schedules": times,
+            "login_sessions": sessions
+        }
+
+@router.delete("/account")
+def delete_my_account(
+    current_user: dict = Depends(get_current_user),
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
+):
+    """DPDP Act 2023 Right to Erasure: Permanently removes the user and all associated attendance/log data."""
+    user_id = current_user["id"]
+    reg = current_user.get("register_number")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # Non-destructive cascaded cleanup
+        cursor.execute("DELETE FROM daily_logs WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM notification_times WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM notification_subscriptions WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM notification_preferences WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM login_sessions WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        
+    if credentials and credentials.credentials:
+        revoke_session_token(credentials.credentials)
+
+    return {
+        "status": "success",
+        "message": f"Account for {reg} and all associated personal data have been permanently erased per DPDP Act 2023."
+    }

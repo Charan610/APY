@@ -21,38 +21,116 @@ try:
 except Exception:
     HAS_BCRYPT = False
 
-SECRET_KEY = "cse-attendance-ledger-jwt-secret-key-2026"
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", os.environ.get("SECRET_KEY", "cse-attendance-ledger-jwt-secret-key-2026"))
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 30  # 30 days
+TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 7  # 7 days expiry
 
 security = HTTPBearer(auto_error=False)
 
-LOGIN_ATTEMPTS: Dict[str, list] = {}
-MAX_ATTEMPTS = 10
-ATTEMPT_WINDOW_SECONDS = 300  # 5 minutes
+# Failed PIN attempts by register_number
+# Structure: { reg: {"attempts": [timestamp, ...], "locked_until": timestamp | None} }
+LOGIN_FAILURES: Dict[str, dict] = {}
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+FAILED_WINDOW_SECONDS = 900       # 15 minutes window
+ACCOUNT_LOCKOUT_SECONDS = 600     # 10 minutes lockout
 
-def check_rate_limit(register_number: str):
+# IP-based rate limiting on login
+IP_LOGIN_REQUESTS: Dict[str, list] = {}
+MAX_IP_LOGIN_PER_MINUTE = 20
+IP_LOGIN_WINDOW_SECONDS = 60
+
+# Admin PIN reset rate limiting
+ADMIN_RESET_REQUESTS: Dict[str, list] = {}
+MAX_ADMIN_RESET_PER_WINDOW = 10
+ADMIN_RESET_WINDOW_SECONDS = 300  # 5 minutes
+
+IP_ADMIN_RESET_REQUESTS: Dict[str, list] = {}
+MAX_IP_ADMIN_RESET_PER_WINDOW = 15
+
+def check_login_rate_limit(register_number: str, client_ip: Optional[str] = None):
     now = time.time()
-    attempts = LOGIN_ATTEMPTS.get(register_number, [])
-    recent_attempts = [t for t in attempts if now - t < ATTEMPT_WINDOW_SECONDS]
-    LOGIN_ATTEMPTS[register_number] = recent_attempts
+    reg = register_number.strip().upper()
     
-    if len(recent_attempts) >= MAX_ATTEMPTS:
-        wait_time = int(ATTEMPT_WINDOW_SECONDS - (now - recent_attempts[0]))
+    # 1. IP-level rate limiting
+    if client_ip:
+        ip_attempts = IP_LOGIN_REQUESTS.get(client_ip, [])
+        recent_ip_attempts = [t for t in ip_attempts if now - t < IP_LOGIN_WINDOW_SECONDS]
+        IP_LOGIN_REQUESTS[client_ip] = recent_ip_attempts
+        if len(recent_ip_attempts) >= MAX_IP_LOGIN_PER_MINUTE:
+            wait_sec = int(IP_LOGIN_WINDOW_SECONDS - (now - recent_ip_attempts[0]))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many login attempts from your IP address. Please wait {max(1, wait_sec)} seconds."
+            )
+
+    # 2. Account lockout on 5 failed attempts
+    record = LOGIN_FAILURES.get(reg, {"attempts": [], "locked_until": None})
+    locked_until = record.get("locked_until")
+    if locked_until and now < locked_until:
+        cooldown_left = int(locked_until - now)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many login attempts for {register_number}. Please try again in {wait_time} seconds."
+            detail=f"Account {reg} is temporarily locked due to 5 failed PIN attempts. Cooldown active for {max(1, cooldown_left)} more seconds."
         )
 
-def record_failed_attempt(register_number: str):
+# Backward-compatible alias
+check_rate_limit = check_login_rate_limit
+
+def record_failed_attempt(register_number: str, client_ip: Optional[str] = None):
     now = time.time()
-    attempts = LOGIN_ATTEMPTS.get(register_number, [])
-    attempts.append(now)
-    LOGIN_ATTEMPTS[register_number] = attempts
+    reg = register_number.strip().upper()
+    
+    # Record IP request
+    if client_ip:
+        ip_attempts = IP_LOGIN_REQUESTS.get(client_ip, [])
+        ip_attempts.append(now)
+        IP_LOGIN_REQUESTS[client_ip] = ip_attempts
+
+    # Record account failed attempt
+    record = LOGIN_FAILURES.get(reg, {"attempts": [], "locked_until": None})
+    recent_attempts = [t for t in record["attempts"] if now - t < FAILED_WINDOW_SECONDS]
+    recent_attempts.append(now)
+    record["attempts"] = recent_attempts
+    
+    if len(recent_attempts) >= MAX_FAILED_LOGIN_ATTEMPTS:
+        record["locked_until"] = now + ACCOUNT_LOCKOUT_SECONDS
+        record["attempts"] = []  # reset attempts; lockout is active
+    
+    LOGIN_FAILURES[reg] = record
 
 def clear_rate_limit(register_number: str):
-    if register_number in LOGIN_ATTEMPTS:
-        del LOGIN_ATTEMPTS[register_number]
+    reg = register_number.strip().upper()
+    if reg in LOGIN_FAILURES:
+        del LOGIN_FAILURES[reg]
+
+def check_admin_reset_rate_limit(admin_reg: str, client_ip: Optional[str] = None):
+    now = time.time()
+    adm = admin_reg.strip().upper()
+    
+    # Admin rate limit
+    adm_attempts = ADMIN_RESET_REQUESTS.get(adm, [])
+    recent_adm = [t for t in adm_attempts if now - t < ADMIN_RESET_WINDOW_SECONDS]
+    if len(recent_adm) >= MAX_ADMIN_RESET_PER_WINDOW:
+        wait_sec = int(ADMIN_RESET_WINDOW_SECONDS - (now - recent_adm[0]))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded for admin PIN resets. Please wait {max(1, wait_sec)} seconds."
+        )
+    recent_adm.append(now)
+    ADMIN_RESET_REQUESTS[adm] = recent_adm
+    
+    # IP rate limit
+    if client_ip:
+        ip_attempts = IP_ADMIN_RESET_REQUESTS.get(client_ip, [])
+        recent_ip = [t for t in ip_attempts if now - t < ADMIN_RESET_WINDOW_SECONDS]
+        if len(recent_ip) >= MAX_IP_ADMIN_RESET_PER_WINDOW:
+            wait_sec = int(ADMIN_RESET_WINDOW_SECONDS - (now - recent_ip[0]))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many PIN reset requests from your IP address. Please wait {max(1, wait_sec)} seconds."
+            )
+        recent_ip.append(now)
+        IP_ADMIN_RESET_REQUESTS[client_ip] = recent_ip
 
 def hash_pin(pin: str) -> str:
     if HAS_BCRYPT:
@@ -132,8 +210,17 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
             detail="Could not validate credentials"
         )
         
+    t_hash = hash_token(token)
     with get_db() as conn:
         cursor = conn.cursor()
+        # Server-side logout verification
+        cursor.execute("SELECT id FROM revoked_tokens WHERE token_hash = ?", (t_hash,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session has been logged out. Please sign in again."
+            )
+
         cursor.execute(
             """
             SELECT u.id, u.register_number, u.section_id, u.baseline_attended, 
@@ -158,6 +245,22 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
 def hash_token(token: str) -> str:
     """Computes a SHA-256 hash of a session token for secure storage & fast lookup."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+def revoke_session_token(token: str, db_conn = None):
+    """Revokes a session token server-side upon logout, invalidating it immediately."""
+    t_hash = hash_token(token)
+    try:
+        if db_conn is not None:
+            cursor = db_conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO revoked_tokens (token_hash) VALUES (?)", (t_hash,))
+            cursor.execute("DELETE FROM login_sessions WHERE token_hash = ?", (t_hash,))
+        else:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR IGNORE INTO revoked_tokens (token_hash) VALUES (?)", (t_hash,))
+                cursor.execute("DELETE FROM login_sessions WHERE token_hash = ?", (t_hash,))
+    except Exception as e:
+        print("Revoke session notice:", e)
 
 def record_login_session(user_id: int, platform: Optional[str], token: str, db_conn=None):
     """Records a new or refreshed login session tagged by platform (web, android, ios)."""

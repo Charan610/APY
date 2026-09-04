@@ -37,14 +37,53 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for Vite frontend
+# CORS Lockdown: Restrict to explicit application origins
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "https://att-per-y.vercel.app",
+    "https://apy-attendance.vercel.app",
+    "capacitor://localhost",
+    "https://localhost",
+    "http://localhost",
+]
+custom_origins = os.environ.get("ALLOWED_ORIGINS", "")
+if custom_origins:
+    for o in custom_origins.split(","):
+        if o.strip() and o.strip() not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(o.strip())
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from fastapi import Request
+from fastapi.responses import RedirectResponse, JSONResponse
+import traceback
+
+@app.middleware("http")
+async def security_and_https_middleware(request: Request, call_next):
+    # Production HTTPS enforcement
+    proto = request.headers.get("x-forwarded-proto")
+    if proto == "http" and (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")):
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url=str(url), status_code=301)
+        
+    response = await call_next(request)
+    # Security hardening transport headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # Include routers under both /api and root prefixes for seamless local + Vercel deployment
 for pfx in ["/api", ""]:
@@ -53,9 +92,6 @@ for pfx in ["/api", ""]:
     app.include_router(attendance_router, prefix=pfx)
     app.include_router(notification_router, prefix=pfx)
     app.include_router(admin_router, prefix=pfx)
-
-from fastapi.responses import JSONResponse
-import traceback
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
@@ -76,9 +112,18 @@ def health_check():
 
 @app.post("/api/admin/backup")
 @app.post("/admin/backup")
-def trigger_backup(current_user: dict = Depends(get_current_user)):
-    # Simple backup endpoint for data durability
+def trigger_backup(request: Request, current_user: dict = Depends(get_current_admin_user)):
+    # Secure backup endpoint with admin role enforcement & audit logging
     backup_file = backup_db()
+    admin_reg = current_user.get("register_number", "ADMIN")
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "127.0.0.1")
+    from database import log_admin_action
+    log_admin_action(
+        admin_reg=admin_reg,
+        action="TRIGGER_BACKUP",
+        details=f"Database snapshot saved: {os.path.basename(backup_file)}",
+        ip_address=client_ip
+    )
     return {
         "status": "success",
         "backup_file": os.path.basename(backup_file),
