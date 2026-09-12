@@ -1,9 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api';
-import { Check, X, Coffee, ChevronLeft, ChevronRight, CheckCheck, Lock, UserX } from 'lucide-react';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { 
+  Check, 
+  X, 
+  Coffee, 
+  ChevronLeft, 
+  ChevronRight, 
+  CheckCheck, 
+  Lock, 
+  UserX, 
+  Flame, 
+  RotateCcw, 
+  FileText,
+  TrendingUp,
+  TrendingDown
+} from 'lucide-react';
 
-export default function TodayTab({ user, onAttendanceUpdated }) {
+export default function TodayTab({ user, summary, onAttendanceUpdated }) {
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [timetableByDay, setTimetableByDay] = useState(() => {
     try {
@@ -24,6 +37,9 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [undoAction, setUndoAction] = useState(null); // { date, previousEntries }
+  const [dayRemarks, setDayRemarks] = useState('');
+  const [showRemarkInput, setShowRemarkInput] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayObj = new Date();
@@ -43,6 +59,14 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
       loadInitialData();
     }
   }, [user?.section_id]);
+
+  useEffect(() => {
+    // Sync current day remarks from dailyLogs
+    const entries = dailyLogs[currentDate] || [];
+    const existingNote = entries.find(e => e.notes)?.notes || '';
+    setDayRemarks(existingNote);
+    setShowRemarkInput(Boolean(existingNote));
+  }, [currentDate, dailyLogs]);
 
   const loadInitialData = async () => {
     try {
@@ -75,9 +99,42 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
     }
   };
 
+  // Calculate clean attendance streak
+  const streakDays = useMemo(() => {
+    let count = 0;
+    const dates = Object.keys(dailyLogs).sort().reverse();
+    for (const d of dates) {
+      const logs = dailyLogs[d] || [];
+      if (!logs.length) continue;
+      const hasAbsent = logs.some(l => l.status === 'absent');
+      const hasPresent = logs.some(l => l.status === 'present');
+      if (hasPresent && !hasAbsent) {
+        count++;
+      } else if (hasAbsent) {
+        break;
+      }
+    }
+    return count;
+  }, [dailyLogs]);
+
+  // Calculate impact of a block
+  const getBlockImpact = (periods, targetStatus) => {
+    const att = summary?.overall?.attended;
+    const tot = summary?.overall?.total;
+    if (att === undefined || tot === undefined || tot === 0) return null;
+    const curPct = (att / tot) * 100;
+    const newTot = tot + periods;
+    const newAtt = targetStatus === 'present' ? att + periods : att;
+    const newPct = (newAtt / newTot) * 100;
+    const diff = newPct - curPct;
+    return {
+      formatted: diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`,
+      isPositive: diff >= 0
+    };
+  };
+
   const getWeekDays = () => {
     const days = [];
-    // Show from 2 days back up to next 7 days (including next Saturday)
     for (let i = -2; i <= 7; i++) {
       const d = new Date();
       d.setDate(todayObj.getDate() + i);
@@ -103,6 +160,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
     const iso = cur.toISOString().split('T')[0];
     setCurrentDate(iso);
     setFeedback('');
+    setUndoAction(null);
   };
 
   const currentWeekday = new Date(currentDate).getDay();
@@ -119,33 +177,35 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
     if (!isDateEditable) return;
 
     const currentStatus = getBlockStatus(blockId);
-    // Toggle: if clicking the currently active status, unmark it
     const targetStatus = (currentStatus === clickedStatus) ? 'unmarked' : clickedStatus;
 
-    // Instant optimistic UI update (0ms lag)
-    const currentEntries = [...(dailyLogs[currentDate] || [])];
+    // Cache previous for undo
+    const prevEntries = dailyLogs[currentDate] ? [...dailyLogs[currentDate]] : [];
+    setUndoAction({ date: currentDate, entries: prevEntries });
+
+    // Optimistic UI update
+    const currentEntries = [...prevEntries];
     const idx = currentEntries.findIndex(e => e.block_id === blockId);
     if (targetStatus === 'unmarked') {
       if (idx >= 0) currentEntries.splice(idx, 1);
     } else {
       if (idx >= 0) {
-        currentEntries[idx] = { ...currentEntries[idx], status: targetStatus };
+        currentEntries[idx] = { ...currentEntries[idx], status: targetStatus, notes: dayRemarks || null };
       } else {
-        currentEntries.push({ block_id: blockId, status: targetStatus });
+        currentEntries.push({ block_id: blockId, status: targetStatus, notes: dayRemarks || null });
       }
     }
 
-    try {
-      Haptics.impact({ style: ImpactStyle.Light });
-    } catch (e) {}
-
     setDailyLogs(prev => ({ ...prev, [currentDate]: currentEntries }));
     setFeedback(targetStatus === 'unmarked' ? 'Unmarked' : `Saved ${targetStatus.toUpperCase()}`);
-    setTimeout(() => setFeedback(''), 1500);
+    setTimeout(() => setFeedback(''), 2500);
 
-    // Non-blocking background save
     try {
-      const res = await api.markAttendance(currentDate, [{ block_id: blockId, status: targetStatus }]);
+      const res = await api.markAttendance(currentDate, [{ 
+        block_id: blockId, 
+        status: targetStatus, 
+        notes: dayRemarks || null 
+      }]);
       if (res?.summary) {
         onAttendanceUpdated(res.summary);
       } else {
@@ -160,14 +220,17 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
   const handleMarkAll = async (status) => {
     if (!isDateEditable || currentBlocks.length === 0) return;
 
-    try {
-      Haptics.impact({ style: ImpactStyle.Medium });
-    } catch (e) {}
+    const prevEntries = dailyLogs[currentDate] ? [...dailyLogs[currentDate]] : [];
+    setUndoAction({ date: currentDate, entries: prevEntries });
 
-    const entries = currentBlocks.map(b => ({ block_id: b.id, status }));
+    const entries = currentBlocks.map(b => ({ 
+      block_id: b.id, 
+      status, 
+      notes: dayRemarks || null 
+    }));
     setDailyLogs(prev => ({ ...prev, [currentDate]: entries }));
     setFeedback(`Marked All ${status.toUpperCase()}`);
-    setTimeout(() => setFeedback(''), 1500);
+    setTimeout(() => setFeedback(''), 2500);
 
     try {
       setSaving(true);
@@ -185,6 +248,57 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
     }
   };
 
+  const handleUndo = async () => {
+    if (!undoAction || undoAction.date !== currentDate) return;
+    const restored = undoAction.entries;
+    setDailyLogs(prev => ({ ...prev, [currentDate]: restored }));
+    setUndoAction(null);
+    setFeedback('Reverted change');
+    setTimeout(() => setFeedback(''), 1500);
+
+    try {
+      setSaving(true);
+      // Construct restoration payload: all section blocks
+      const payload = currentBlocks.map(b => {
+        const match = restored.find(r => r.block_id === b.id);
+        return {
+          block_id: b.id,
+          status: match ? match.status : 'unmarked',
+          notes: match?.notes || null
+        };
+      });
+      const res = await api.markAttendance(currentDate, payload);
+      if (res?.summary) onAttendanceUpdated(res.summary);
+      else onAttendanceUpdated();
+    } catch (err) {
+      console.error('Undo failed:', err);
+      loadLogs();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveRemarks = async () => {
+    const entries = dailyLogs[currentDate] || [];
+    if (entries.length === 0) {
+      setShowRemarkInput(false);
+      return;
+    }
+    const updatedEntries = entries.map(e => ({ ...e, notes: dayRemarks }));
+    setDailyLogs(prev => ({ ...prev, [currentDate]: updatedEntries }));
+    setFeedback('Remarks Saved');
+    setTimeout(() => setFeedback(''), 1500);
+    try {
+      await api.markAttendance(currentDate, updatedEntries.map(e => ({
+        block_id: e.block_id,
+        status: e.status,
+        notes: dayRemarks || null
+      })));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div>
       {/* Week Navigator Ribbon */}
@@ -193,7 +307,7 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
           <div
             key={d.dateStr}
             className={`ribbon-day-cell ${currentDate === d.dateStr ? 'active' : ''}`}
-            onClick={() => { setCurrentDate(d.dateStr); setFeedback(''); }}
+            onClick={() => { setCurrentDate(d.dateStr); setFeedback(''); setUndoAction(null); }}
           >
             <div className="ribbon-day-label">{d.dayName}</div>
             <div className="ribbon-day-num">{d.dayNum}</div>
@@ -206,16 +320,34 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
       <div className="ledger-card">
         <div className="card-header-ruled">
           <div>
-            <div className="card-header-title">
+            <div className="card-header-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span>{new Date(currentDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
               {currentDate === todayStr && <span className="card-header-badge good">Today</span>}
+              {streakDays > 1 && (
+                <span className="card-header-badge good" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }} title="Consecutive days 100% attended">
+                  <Flame size={12} color="#f59e0b" fill="#f59e0b" />
+                  {streakDays}d Streak
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
               Section {user?.section_label} · {feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Included in Baseline Cutoff' : 'Active Schedule Window')}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+            {undoAction && (
+              <button 
+                type="button" 
+                className="btn btn-secondary btn-sm" 
+                onClick={handleUndo} 
+                style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                title="Undo last change"
+              >
+                <RotateCcw size={12} />
+                <span>Undo</span>
+              </button>
+            )}
             <button type="button" className="btn-icon" onClick={() => shiftDate(-1)} title="Previous Day">
               <ChevronLeft size={16} />
             </button>
@@ -246,18 +378,50 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
           </div>
         ) : null}
 
-        {/* Action helper buttons */}
+        {/* Action helper buttons & Day Remarks */}
         {isDateEditable && !isSunday && currentBlocks.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.85rem', flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('present')} disabled={saving}>
-              <CheckCheck size={14} color="var(--good)" /> All Present
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('absent')} disabled={saving}>
-              <UserX size={14} color="var(--bad)" /> All Absent
-            </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('holiday')} disabled={saving}>
-              <Coffee size={14} color="var(--accent-gold)" /> Day Holiday
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              {!showRemarkInput && !dayRemarks ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowRemarkInput(true)}
+                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                >
+                  <FileText size={12} /> + Remarks (OD / Medical / Fest)
+                </button>
+              ) : null}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('present')} disabled={saving}>
+                <CheckCheck size={14} color="var(--good)" /> All Present
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('absent')} disabled={saving}>
+                <UserX size={14} color="var(--bad)" /> All Absent
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('holiday')} disabled={saving}>
+                <Coffee size={14} color="var(--accent-gold)" /> Day Holiday
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Optional Day Remarks Input Box */}
+        {showRemarkInput && isDateEditable && !isSunday && (
+          <div style={{ background: 'var(--surface-alt)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', marginBottom: '0.85rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <FileText size={14} color="var(--accent-gold)" />
+            <input
+              type="text"
+              className="input-text"
+              placeholder="e.g., On-Duty (OD) for NSS / Technical Fest / Medical Slip"
+              value={dayRemarks}
+              onChange={(e) => setDayRemarks(e.target.value)}
+              onBlur={handleSaveRemarks}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRemarks(); }}
+              style={{ fontSize: '0.75rem', flex: 1, padding: '0.25rem 0.5rem' }}
+            />
           </div>
         )}
 
@@ -278,15 +442,29 @@ export default function TodayTab({ user, onAttendanceUpdated }) {
           <div>
             {currentBlocks.map((block) => {
               const status = getBlockStatus(block.id);
+              const presentImpact = getBlockImpact(block.periods, 'present');
+              const absentImpact = getBlockImpact(block.periods, 'absent');
+
               return (
                 <div key={block.id} className="period-ledger-block">
                   <div className="block-title-box">
                     <span className="block-index-badge">#{block.order_index}</span>
                     <div>
                       <div className="block-name">{block.subject}</div>
-                      <div className="block-weight">
-                        {block.periods} {block.periods === 1 ? 'Period' : 'Periods'}
-                        {block.subject.includes('LAB') && <span style={{ color: 'var(--accent-gold)', marginLeft: '4px', fontWeight: 600 }}>[Lab]</span>}
+                      <div className="block-weight" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span>
+                          {block.periods} {block.periods === 1 ? 'Period' : 'Periods'}
+                          {block.subject.includes('LAB') && <span style={{ color: 'var(--accent-gold)', marginLeft: '4px', fontWeight: 600 }}>[Lab]</span>}
+                        </span>
+
+                        {/* Real-time period impact badges */}
+                        {presentImpact && absentImpact && (
+                          <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--ink-soft)' }}>
+                            <span style={{ color: 'var(--good)' }}>Present: {presentImpact.formatted}</span>
+                            {' · '}
+                            <span style={{ color: 'var(--bad)' }}>Absent: {absentImpact.formatted}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

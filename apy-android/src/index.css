@@ -929,3 +929,67 @@ h1, h2, h3, h4, .heading-ledger {
   font-weight: 600;
 }
 
+/* ========================================================= */
+/* PERFORMANCE & ACCESSIBILITY ENHANCEMENTS                  */
+/* ========================================================= */
+
+/* Prevent 300ms touch delay on mobile */
+button, input, select, textarea, a, .tab-btn, .status-pill-btn, .ribbon-day-cell {
+  touch-action: manipulation;
+}
+
+/* Subtle, tactile hardware-accelerated button active state */
+.btn:active, .btn-icon:active, .status-pill-btn:active, .tab-btn:active {
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
+}
+
+/* Accessible focus rings */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+
+/* Skeleton Loading Shimmer Animation */
+.skeleton-pulse-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-line {
+  background: rgba(255, 255, 255, 0.07);
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: skeleton-shimmer 1.6s infinite ease-in-out;
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+

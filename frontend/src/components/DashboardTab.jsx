@@ -1,7 +1,22 @@
-import React from 'react';
-import { ShieldAlert, CheckCircle2, AlertTriangle, Layers, BookOpen } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  ShieldAlert, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Layers, 
+  Download, 
+  Award, 
+  ShieldCheck, 
+  ArrowUpDown,
+  FileSpreadsheet,
+  CalendarCheck
+} from 'lucide-react';
+import { api } from '../api';
 
 export default function DashboardTab({ summary, user }) {
+  const [exporting, setExporting] = useState(false);
+  const [sortBy, setSortBy] = useState('default'); // 'default', 'lowest', 'highest'
+
   const overall = summary?.overall || {
     percentage: 0.0,
     attended: 0,
@@ -15,17 +30,57 @@ export default function DashboardTab({ summary, user }) {
     must_attend_next: 0
   };
 
-  const subjects = Object.values(summary?.subjects || {});
+  const getTier = (pct) => {
+    if (pct >= 85) return { label: 'Distinction (≥85%)', icon: Award, color: 'var(--good)', badgeClass: 'good' };
+    if (pct >= 75) return { label: 'Safe Zone (≥75%)', icon: ShieldCheck, color: 'var(--good)', badgeClass: 'good' };
+    if (pct >= 70) return { label: 'Borderline (70-74%)', icon: AlertTriangle, color: 'var(--accent-gold)', badgeClass: 'bad' };
+    return { label: 'Detention Alert (<70%)', icon: ShieldAlert, color: 'var(--bad)', badgeClass: 'bad' };
+  };
+
+  const tier = getTier(overall.percentage);
+  const TierIcon = tier.icon;
+
+  let subjects = Object.values(summary?.subjects || {});
+  if (sortBy === 'lowest') {
+    subjects = [...subjects].sort((a, b) => a.percentage - b.percentage);
+  } else if (sortBy === 'highest') {
+    subjects = [...subjects].sort((a, b) => b.percentage - a.percentage);
+  }
+
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true);
+      await api.exportCsv();
+    } catch (e) {
+      alert('CSV Export: ' + (e.message || 'Error downloading ledger'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div>
       {/* Hero Overall Aggregate Card */}
       <div className="ledger-card">
         <div className="card-header-ruled">
-          <span className="card-header-title">Overall Attendance Register</span>
-          <span className={`card-header-badge ${overall.is_below_threshold ? 'bad' : 'good'}`}>
-            {overall.is_below_threshold ? 'Under 75%' : 'Safe'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span className="card-header-title">Overall Attendance Register</span>
+            <span className={`card-header-badge ${tier.badgeClass}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+              <TierIcon size={12} />
+              {tier.label}
+            </span>
+          </div>
+          <button 
+            type="button" 
+            className="btn btn-secondary btn-sm" 
+            onClick={handleExportCsv} 
+            disabled={exporting}
+            style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            title="Download CSV Attendance Ledger"
+          >
+            <FileSpreadsheet size={13} color="var(--accent-gold)" />
+            <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
+          </button>
         </div>
 
         <div className="hero-figure-group">
@@ -58,7 +113,7 @@ export default function DashboardTab({ summary, user }) {
             <>
               <ShieldAlert size={18} />
               <div>
-                <strong>Must attend next {overall.must_attend_next} periods</strong> consecutively to recover $\ge$ 75%.
+                <strong>Must attend next {overall.must_attend_next} periods</strong> consecutively to climb back to 75%.
               </div>
             </>
           ) : (
@@ -73,14 +128,26 @@ export default function DashboardTab({ summary, user }) {
       </div>
 
       {/* Subject-Wise Ledger Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1.25rem 0 0.75rem' }}>
-        <h3 className="heading-ledger" style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1.25rem 0 0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <h3 className="heading-ledger" style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
           <Layers size={16} color="var(--accent-gold)" />
           <span>Subject-Wise Register</span>
         </h3>
-        <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-          {subjects.length} Subjects
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+            {subjects.length} Subjects
+          </span>
+          <select 
+            value={sortBy} 
+            onChange={(e) => setSortBy(e.target.value)}
+            className="input-select"
+            style={{ fontSize: '0.72rem', padding: '0.2rem 0.4rem', background: 'var(--surface-alt)' }}
+          >
+            <option value="default">Default Order</option>
+            <option value="lowest">Lowest % First</option>
+            <option value="highest">Highest % First</option>
+          </select>
+        </div>
       </div>
 
       {/* Subject-Wise Cards */}

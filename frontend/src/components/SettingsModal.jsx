@@ -1477,6 +1477,33 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               </p>
             </div>
 
+            {/* What's New in v1.4.0 Changelog Card */}
+            <div style={{
+              background: 'var(--surface-alt)',
+              border: '1px solid var(--rule)',
+              borderRadius: 'var(--radius-md)',
+              padding: '0.85rem 1rem',
+              marginBottom: '0.85rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.5rem' }}>
+                <Sparkles size={16} color="var(--accent-gold, #d97706)" />
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--ink)' }}>
+                  What's New in v{CURRENT_APP_VERSION}
+                </span>
+                <span style={{ fontSize: '0.68rem', color: 'var(--good)', background: 'rgba(16, 185, 129, 0.12)', padding: '0.1rem 0.45rem', borderRadius: '999px', fontWeight: 700 }}>
+                  Latest Update
+                </span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.75rem', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+                <li><strong>Target Goal Calculator</strong>: Calculate consecutive periods & completion dates to hit 75%, 80%, or 85%.</li>
+                <li><strong>Period Impact Preview</strong>: Real-time badges showing (+% / -%) outcome on each period block.</li>
+                <li><strong>Clean Attendance Streak</strong>: Dynamic badge celebrating consecutive 100% attendance days.</li>
+                <li><strong>Official CSV Export</strong>: One-click attendance ledger download for personal or faculty submission.</li>
+                <li><strong>Network Reconnect Resilience</strong>: Instant offline awareness & automatic live sync status banner.</li>
+                <li><strong>Period Time Hints & Search</strong>: Estimated lecture/lab slot timings and instant schedule search.</li>
+              </ul>
+            </div>
+
             {/* In-App Update Checker Card */}
             <div style={{
               background: updateInfo?.hasUpdate ? 'rgba(234, 88, 12, 0.06)' : 'var(--surface)',

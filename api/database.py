@@ -472,6 +472,12 @@ def init_db():
                 cursor.execute("ALTER TABLE users ADD COLUMN consent_given_at TIMESTAMP;")
             except Exception:
                 pass
+
+            # Safe non-destructive column migration for notes in daily_logs
+            try:
+                cursor.execute("ALTER TABLE daily_logs ADD COLUMN notes TEXT;")
+            except Exception:
+                pass
     except Exception as e:
         print("Init DB notice:", e)
 

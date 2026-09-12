@@ -1,16 +1,31 @@
 import math
+import csv
+import io
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Dict
 from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from database import get_db
 from auth import get_current_user
+
+try:
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo("Asia/Kolkata")
+except Exception:
+    IST = None
+
+def get_today_ist() -> date:
+    if IST:
+        return datetime.now(IST).date()
+    return date.today()
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 class MarkAttendanceItem(BaseModel):
     block_id: int
     status: str = Field(..., pattern="^(present|absent|holiday|unmarked)$")
+    notes: Optional[str] = None
 
 class MarkAttendanceRequest(BaseModel):
     log_date: str = Field(..., pattern="^\\d{4}-\\d{2}-\\d{2}$") # YYYY-MM-DD
@@ -28,7 +43,7 @@ def validate_edit_window(log_date_str: str, baseline_date_str: Optional[str] = N
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
         
-    today = date.today()
+    today = get_today_ist()
     min_date = today - timedelta(days=7)
     max_date = today + timedelta(days=7)
     
@@ -89,7 +104,7 @@ def get_daily_logs(
     current_user: dict = Depends(get_current_user)
 ):
     user_id = current_user["id"]
-    today = date.today()
+    today = get_today_ist()
     
     if not start_date:
         start_date = (today - timedelta(days=30)).isoformat()
@@ -100,7 +115,7 @@ def get_daily_logs(
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT l.id, l.log_date, l.block_id, l.status, l.updated_at,
+            SELECT l.id, l.log_date, l.block_id, l.status, COALESCE(l.notes, '') as notes, l.updated_at,
                    b.subject, b.periods, b.order_index, b.weekday
             FROM daily_logs l
             JOIN timetable_blocks b ON l.block_id = b.id
@@ -221,7 +236,7 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
             if entry.status == "unmarked":
                 unmarked_entries.append((user_id, req.log_date, entry.block_id))
             else:
-                active_entries.append((user_id, req.log_date, entry.block_id, entry.status))
+                active_entries.append((user_id, req.log_date, entry.block_id, entry.status, entry.notes))
                 
         # 2. Batch delete unmarked entries
         if unmarked_entries:
@@ -240,10 +255,12 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
         # 3. Batch upsert active entries
         if active_entries:
             upsert_sql = """
-                INSERT INTO daily_logs (user_id, log_date, block_id, status, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO daily_logs (user_id, log_date, block_id, status, notes, updated_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(user_id, log_date, block_id) 
-                DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP
+                DO UPDATE SET status = excluded.status, 
+                              notes = COALESCE(excluded.notes, daily_logs.notes),
+                              updated_at = CURRENT_TIMESTAMP
             """
             if hasattr(cursor, "executemany"):
                 cursor.executemany(upsert_sql, active_entries)
@@ -279,7 +296,7 @@ def forecast_attendance(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format")
         
-    today = date.today()
+    today = get_today_ist()
     # Ensure date is within forward 7 days
     if t_date < today or t_date > (today + timedelta(days=7)):
         raise HTTPException(
@@ -354,3 +371,128 @@ def forecast_attendance(
             "is_holiday": False,
             "blocks": forecast_blocks
         }
+
+@router.get("/target-calculator")
+def calculate_attendance_target(
+    target_percentage: float = Query(75.0, ge=1.0, le=100.0),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Simulates consecutive attendance required to reach an arbitrary target % (e.g. 75, 80, 85).
+    Cross-references user's section timetable to estimate the exact calendar date of goal completion.
+    """
+    with get_db() as conn:
+        summary = compute_summary_for_user(conn, current_user)
+        att = summary["overall"]["attended"]
+        tot = summary["overall"]["total"]
+        current_pct = summary["overall"]["percentage"]
+        p = target_percentage / 100.0
+
+        if tot == 0:
+            return {
+                "target_percentage": target_percentage,
+                "current_percentage": 0.0,
+                "status": "above_target",
+                "periods_needed": 0,
+                "safe_to_miss": 0,
+                "projected_date": None,
+                "message": "No attendance logged yet."
+            }
+
+        if current_pct >= target_percentage:
+            safe_bunks = math.floor((att / p) - tot) if p > 0 else 0
+            return {
+                "target_percentage": target_percentage,
+                "current_percentage": current_pct,
+                "status": "above_target",
+                "periods_needed": 0,
+                "safe_to_miss": max(0, safe_bunks),
+                "projected_date": None,
+                "message": f"Currently at {current_pct}%, safely above {target_percentage}%. You can safely miss {max(0, safe_bunks)} periods."
+            }
+        else:
+            needed = math.ceil((p * tot - att) / (1.0 - p))
+            needed = max(1, needed)
+
+            # Look up weekly timetable distribution
+            cursor = conn.cursor()
+            section_id = current_user.get("section_id") or 1
+            cursor.execute(
+                "SELECT weekday, SUM(periods) as day_periods FROM timetable_blocks WHERE section_id = ? GROUP BY weekday",
+                (section_id,)
+            )
+            tt_rows = cursor.fetchall()
+            weekday_periods = {r["weekday"]: r["day_periods"] for r in tt_rows}
+
+            accumulated = 0
+            check_date = get_today_ist()
+            projected_date = None
+
+            for _ in range(90):
+                check_date += timedelta(days=1)
+                db_weekday = (check_date.weekday() + 1) % 7
+                if db_weekday == 0:
+                    continue
+                day_periods = weekday_periods.get(db_weekday, 0)
+                if day_periods > 0:
+                    accumulated += day_periods
+                    if accumulated >= needed:
+                        projected_date = check_date.isoformat()
+                        break
+
+            return {
+                "target_percentage": target_percentage,
+                "current_percentage": current_pct,
+                "status": "below_target",
+                "periods_needed": needed,
+                "safe_to_miss": 0,
+                "projected_date": projected_date,
+                "message": f"Attend next {needed} consecutive periods to reach {target_percentage}%."
+            }
+
+@router.get("/export-csv")
+def export_attendance_csv(current_user: dict = Depends(get_current_user)):
+    """
+    Exports full chronological attendance ledger to CSV format.
+    """
+    user_id = current_user["id"]
+    reg_num = current_user.get("register_number", "student")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT l.log_date, b.weekday, b.subject, b.periods, l.status, COALESCE(l.notes, '') as notes
+            FROM daily_logs l
+            JOIN timetable_blocks b ON l.block_id = b.id
+            WHERE l.user_id = ?
+            ORDER BY l.log_date DESC, b.order_index ASC
+            """,
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Date", "Weekday", "Subject", "Periods", "Status", "Remarks / Notes"])
+
+        day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        for r in rows:
+            w_idx = r["weekday"]
+            w_name = day_names[w_idx] if 0 <= w_idx < 7 else ""
+            writer.writerow([
+                r["log_date"],
+                w_name,
+                r["subject"],
+                r["periods"],
+                r["status"].capitalize(),
+                r["notes"]
+            ])
+
+        csv_content = output.getvalue()
+        filename = f"apy_attendance_{reg_num}.csv"
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )

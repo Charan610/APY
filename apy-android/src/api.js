@@ -150,6 +150,28 @@ export const api = {
   }),
   getSummary: () => request('/attendance/summary'),
   getForecast: (targetDate) => request(`/attendance/forecast?target_date=${targetDate}`),
+  getTargetCalculation: (targetPct = 75) => request(`/attendance/target-calculator?target_percentage=${targetPct}`),
+  exportCsv: async () => {
+    const token = getAuthToken();
+    const baseUrl = getApiBase();
+    const platform = getClientPlatform();
+    const response = await fetch(`${baseUrl}/attendance/export-csv`, {
+      headers: {
+        'X-Client-Platform': platform,
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (!response.ok) throw new Error('Failed to export CSV');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `apy_attendance_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  },
 
   // Admin
   triggerBackup: () => request('/admin/backup', { method: 'POST' }),

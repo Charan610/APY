@@ -9,6 +9,7 @@ import ForecastTab from './components/ForecastTab';
 import SettingsModal from './components/SettingsModal';
 import NotificationPromptModal from './components/NotificationPromptModal';
 import AdminModal from './components/AdminModal';
+import OfflineBanner from './components/OfflineBanner';
 import { registerServiceWorker } from './notifications';
 import { checkForAppUpdate } from './updateChecker';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
@@ -250,6 +251,7 @@ export default function App() {
 
   return (
     <div className="app-viewport">
+      <OfflineBanner />
       {!user ? (
         <AuthModal onAuthSuccess={handleAuthSuccess} />
       ) : (
@@ -275,6 +277,7 @@ export default function App() {
             {activeTab === 'today' && (
               <TodayTab
                 user={user}
+                summary={summary}
                 onAttendanceUpdated={handleAttendanceUpdated}
               />
             )}

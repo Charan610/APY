@@ -12,13 +12,17 @@ import {
   Layers,
   ArrowRight,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Target,
+  Share2,
+  Copy,
+  Check
 } from 'lucide-react';
 
 const FORECAST_HORIZON_DAYS = 14;
 
 export default function ForecastTab({ user }) {
-  // Navigation mode: 'continuous' (Multi-day continuous forecast) or 'snapshot' (Single-day period comparison)
+  // Navigation mode: 'continuous' (Multi-day continuous forecast), 'snapshot' (Single-day period comparison), or 'goal' (Target Goal Calculator)
   const [viewMode, setViewMode] = useState('continuous');
 
   // Single-day snapshot state (existing FAT functionality)
@@ -35,6 +39,12 @@ export default function ForecastTab({ user }) {
 
   // Scenario selections per date: { [dateStr]: attendedPeriodCount }
   const [selectedScenarios, setSelectedScenarios] = useState({});
+
+  // Target Goal Calculator state
+  const [targetPct, setTargetPct] = useState(75);
+  const [targetResult, setTargetResult] = useState(null);
+  const [targetLoading, setTargetLoading] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
 
   // 8-day ribbon for snapshot mode
   const nextDays = useMemo(() => {
@@ -321,17 +331,52 @@ export default function ForecastTab({ user }) {
     setSelectedScenarios({});
   };
 
+  const loadTargetCalc = async (pct) => {
+    setTargetLoading(true);
+    try {
+      const res = await api.getTargetCalculation(pct);
+      setTargetResult(res);
+    } catch (e) {
+      console.error('Target calc error:', e);
+    } finally {
+      setTargetLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'goal') {
+      loadTargetCalc(targetPct);
+    }
+  }, [viewMode, targetPct]);
+
+  const handleShareCard = () => {
+    if (!summary?.overall) return;
+    const ov = summary.overall;
+    const text = `📊 APY Attendance Status — ${user?.register_number || 'Student'}\n` +
+      `Overall: ${ov.percentage.toFixed(2)}% (${ov.attended}/${ov.total} periods)\n` +
+      `Status: ${ov.is_below_threshold ? 'Under 75% ⚠️' : 'Safe Zone ✅'}\n` +
+      `${ov.is_below_threshold ? `Must Attend Next: ${ov.must_attend_next} periods` : `Safe to Miss: ${ov.safe_to_miss} periods`}\n` +
+      `Check live: https://apy-i1s1.vercel.app`;
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2000);
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
   return (
     <div>
-      {/* Top View Toggle: Continuous Multi-Day Forecast vs Single-Day Snapshot */}
-      <div className="forecast-view-switch">
+      {/* Top View Toggle: Continuous Multi-Day Forecast vs Single-Day Snapshot vs Goal Calculator */}
+      <div className="forecast-view-switch" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           type="button"
           className={`forecast-view-btn ${viewMode === 'continuous' ? 'active' : ''}`}
           onClick={() => setViewMode('continuous')}
         >
           <TrendingUp size={15} />
-          <span>Multi-Day Forecast</span>
+          <span>Multi-Day</span>
         </button>
         <button
           type="button"
@@ -339,7 +384,25 @@ export default function ForecastTab({ user }) {
           onClick={() => setViewMode('snapshot')}
         >
           <Calendar size={15} />
-          <span>Single-Day Snapshot</span>
+          <span>Snapshot</span>
+        </button>
+        <button
+          type="button"
+          className={`forecast-view-btn ${viewMode === 'goal' ? 'active' : ''}`}
+          onClick={() => setViewMode('goal')}
+        >
+          <Target size={15} />
+          <span>Goal Calc</span>
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={handleShareCard}
+          style={{ marginLeft: 'auto', fontSize: '0.72rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+          title="Copy formatted attendance summary card"
+        >
+          {copiedShare ? <Check size={13} color="var(--good)" /> : <Share2 size={13} color="var(--accent-gold)" />}
+          <span>{copiedShare ? 'Copied Card!' : 'Share Summary'}</span>
         </button>
       </div>
 
@@ -768,6 +831,110 @@ export default function ForecastTab({ user }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODE 3: TARGET ATTENDANCE GOAL CALCULATOR                 */}
+      {/* ========================================================= */}
+      {viewMode === 'goal' && (
+        <div className="ledger-card">
+          <div className="card-header-ruled">
+            <div>
+              <span className="card-header-title">Target Attendance Goal Simulator</span>
+              <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                Calculate exact periods & calendar date required to reach any target percentage
+              </div>
+            </div>
+            <span className="card-header-badge good">Dynamic FAT Engine</span>
+          </div>
+
+          <div style={{ margin: '1rem 0' }}>
+            <label style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', display: 'block', marginBottom: '0.4rem' }}>
+              Choose or Enter Desired Target Percentage:
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              {[75, 80, 85, 90].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={`btn btn-sm ${targetPct === preset ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setTargetPct(preset)}
+                  style={{ minWidth: '70px', fontWeight: 700 }}
+                >
+                  {preset}% {preset === 75 ? '(Pass)' : preset === 85 ? '(Distinction)' : ''}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', maxWidth: '240px' }}>
+              <input
+                type="number"
+                className="input-text"
+                min="1"
+                max="100"
+                step="0.5"
+                value={targetPct}
+                onChange={(e) => setTargetPct(parseFloat(e.target.value) || 75)}
+                style={{ textAlign: 'center', fontWeight: 700, fontSize: '1rem' }}
+              />
+              <span style={{ fontWeight: 700, color: 'var(--ink)' }}>%</span>
+            </div>
+          </div>
+
+          {targetLoading ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
+              Computing timetable projection...
+            </div>
+          ) : targetResult ? (
+            <div style={{ background: 'var(--surface-alt)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--rule)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>CURRENT STATUS</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
+                    {targetResult.current_percentage.toFixed(2)}%
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>TARGET GOAL</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-gold)', fontFamily: 'var(--font-mono)' }}>
+                    {targetResult.target_percentage}%
+                  </div>
+                </div>
+              </div>
+
+              {targetResult.status === 'above_target' ? (
+                <div className="bunk-banner good">
+                  <CheckCircle2 size={18} />
+                  <div>
+                    <strong>Already Above Target!</strong> You are currently at {targetResult.current_percentage.toFixed(2)}%. You can safely miss <strong>{targetResult.safe_to_miss} periods</strong> while staying at or above {targetResult.target_percentage}%.
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="bunk-banner bad" style={{ marginBottom: '0.75rem' }}>
+                    <AlertTriangle size={18} />
+                    <div>
+                      <strong>Must attend {targetResult.periods_needed} consecutive periods</strong> to reach {targetResult.target_percentage}%.
+                    </div>
+                  </div>
+
+                  {targetResult.projected_date && (
+                    <div style={{ padding: '0.75rem', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule)', fontSize: '0.85rem' }}>
+                      📅 <strong>Estimated Completion Date:</strong>{' '}
+                      <span style={{ color: 'var(--good)', fontWeight: 700 }}>
+                        {new Date(targetResult.projected_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
+                        Calculated by mapping upcoming classes in Section {user?.section_label || 'timetable'}.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
     </div>
