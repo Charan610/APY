@@ -167,5 +167,18 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payload || {})
   }),
-  sendTestNotification: () => request('/notifications/test', { method: 'POST' })
+  sendTestNotification: () => request('/notifications/test', { method: 'POST' }),
+
+  // APK Update Broadcasts & Device Sync
+  broadcastApkUpdate: (payload = {}) => request('/admin/broadcast-apk-update', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }),
+  getApkBroadcasts: (limit = 20) => request(`/admin/apk-broadcasts?limit=${limit}`),
+  getLatestApkInfo: () => request('/notifications/latest-apk'),
+  syncUserDevice: (platform = 'android', appVersion = '') => request('/notifications/sync-device', {
+    method: 'POST',
+    body: JSON.stringify({ platform, app_version: appVersion })
+  })
 };
+

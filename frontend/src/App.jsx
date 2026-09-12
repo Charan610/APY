@@ -11,7 +11,7 @@ import NotificationPromptModal from './components/NotificationPromptModal';
 import AdminModal from './components/AdminModal';
 import OfflineBanner from './components/OfflineBanner';
 import { registerServiceWorker } from './notifications';
-import { checkForAppUpdate } from './updateChecker';
+import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
 
 export default function App() {
@@ -21,6 +21,14 @@ export default function App() {
       return localStorage.getItem('apy_has_update_badge') === 'true';
     } catch {
       return false;
+    }
+  });
+  const [updateInfo, setUpdateInfo] = useState(() => {
+    try {
+      const cached = localStorage.getItem('apy_update_check_cache');
+      return cached ? JSON.parse(cached)?.data : null;
+    } catch {
+      return null;
     }
   });
   const [summary, setSummary] = useState(() => {
@@ -66,8 +74,12 @@ export default function App() {
     checkForAppUpdate().then((res) => {
       if (res?.hasUpdate) {
         setHasUpdate(true);
+        setUpdateInfo(res);
       }
     }).catch(() => {});
+
+    // Sync device version
+    api.syncUserDevice('web', CURRENT_APP_VERSION).catch(() => {});
   }, []);
 
   // 3. Live in-app reminder scheduler for active browser tabs & PWAs
@@ -272,6 +284,64 @@ export default function App() {
             onLogout={handleLogout}
             hasUpdate={hasUpdate}
           />
+
+          {/* Real-time Update Notification Banner for Previous Versions */}
+          {hasUpdate && updateInfo && (
+            <aside 
+              aria-label="App update available"
+              className="update-notification-banner"
+              style={{
+                background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+                borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
+                padding: '10px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                position: 'relative',
+                zIndex: 35
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <span style={{ fontSize: '20px' }}>🚀</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.2 }}>
+                    New APY Update (v{updateInfo.latestVersion || '1.4.0'})
+                  </div>
+                  <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Tap to update and install latest enhancements
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (updateInfo.apkUrl) {
+                    installAppUpdate(updateInfo.apkUrl);
+                  } else {
+                    setSettingsTab('about');
+                    setShowSettings(true);
+                  }
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #d97706, #b45309)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '7px 14px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
+                  flexShrink: 0
+                }}
+              >
+                Update Now
+              </button>
+            </aside>
+          )}
 
           <main>
             {activeTab === 'today' && (

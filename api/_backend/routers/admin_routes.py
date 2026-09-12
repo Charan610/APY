@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from database import get_db, log_admin_action
 from auth import hash_pin, get_current_admin_user, check_admin_reset_rate_limit
+from notifications import broadcast_apk_update_notification, get_latest_apk_broadcast
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -394,3 +395,61 @@ def get_platform_stats(admin_user: dict = Depends(get_current_admin_user)):
             "web_only_students": web_only,
             "dual_students": dual_users
         }
+
+class BroadcastUpdateRequest(BaseModel):
+    version: Optional[str] = "1.4.0"
+    apk_url: Optional[str] = None
+    release_notes: Optional[str] = None
+
+@router.post("/broadcast-apk-update")
+def broadcast_apk_update(
+    req: BroadcastUpdateRequest,
+    request: Request,
+    admin_user: dict = Depends(get_current_admin_user)
+):
+    admin_reg = admin_user.get("register_number", "ADMIN")
+    client_ip = get_client_ip(request)
+    
+    version = (req.version or "1.4.0").lstrip("v").strip()
+    apk_url = req.apk_url or f"https://github.com/Charan610/APY/releases/download/v{version}/APY.apk"
+    notes = req.release_notes or f"APY v{version} is now released with new features and enhancements."
+    
+    res = broadcast_apk_update_notification(
+        version=version,
+        apk_url=apk_url,
+        release_notes=notes,
+        created_by=admin_reg
+    )
+    
+    log_admin_action(
+        admin_reg=admin_reg,
+        action="BROADCAST_APK_UPDATE",
+        target=f"v{version}",
+        details=f"Sent to {res.get('notifications_sent', 0)} users. URL: {apk_url}",
+        ip_address=client_ip
+    )
+    
+    return {
+        "status": "success",
+        "message": f"Broadcast push notification sent for APK v{version} to {res.get('notifications_sent', 0)} devices.",
+        "details": res
+    }
+
+@router.get("/apk-broadcasts")
+def list_apk_broadcasts(
+    limit: int = Query(20, ge=1, le=100),
+    admin_user: dict = Depends(get_current_admin_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, version, apk_url, release_notes, notified_count, created_by, created_at
+            FROM apk_update_broadcasts
+            ORDER BY id DESC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        return {
+            "broadcasts": [dict(r) for r in rows] if rows else []
+        }
+

@@ -197,3 +197,99 @@ def dispatch_scheduled_reminders(target_time_str: Optional[str] = None) -> Dict[
         results["error"] = str(e)
 
     return results
+
+def broadcast_apk_update_notification(
+    version: str,
+    apk_url: Optional[str] = None,
+    release_notes: Optional[str] = None,
+    created_by: str = "admin"
+) -> Dict[str, Any]:
+    """
+    Broadcasts a push notification to all users who have downloaded a previous version
+    or use the Android app / have active push subscriptions.
+    """
+    from database import get_db
+    clean_version = (version or "").lstrip("v").strip()
+    clean_url = apk_url or f"https://github.com/Charan610/APY/releases/download/v{clean_version}/APY.apk"
+    notes = release_notes or f"Version {clean_version} is now available with new enhancements and stability improvements."
+
+    payload = {
+        "title": f"🚀 New APY Update Available (v{clean_version})",
+        "body": f"A new version of APY is ready! Tap to download and install the update.",
+        "icon": "/android-chrome-192x192.png",
+        "badge": "/favicon.ico",
+        "tag": f"apk-update-{clean_version}",
+        "data": {
+            "type": "apk_update",
+            "version": clean_version,
+            "url": clean_url,
+            "release_notes": notes,
+            "action": "open_update"
+        }
+    }
+
+    results = {
+        "status": "success",
+        "version": clean_version,
+        "apk_url": clean_url,
+        "total_targets": 0,
+        "notifications_sent": 0,
+        "failed": 0
+    }
+
+    try:
+        with get_db() as db:
+            cursor = db.cursor()
+
+            # Query all distinct active push subscriptions
+            cursor.execute("""
+                SELECT DISTINCT ns.id, ns.user_id, ns.endpoint, ns.keys_p256dh, ns.keys_auth
+                FROM notification_subscriptions ns
+            """)
+            subs = cursor.fetchall()
+            results["total_targets"] = len(subs)
+
+            for sub in subs:
+                sub_dict = dict(sub)
+                # If endpoint is native android marker, it receives via in-app/local notifications
+                if sub_dict.get("endpoint") == "android-native":
+                    results["notifications_sent"] += 1
+                    continue
+
+                success, code, msg = send_push_notification(sub_dict, payload)
+                if success:
+                    results["notifications_sent"] += 1
+                else:
+                    results["failed"] += 1
+
+            # Record in apk_update_broadcasts table
+            cursor.execute("""
+                INSERT INTO apk_update_broadcasts (version, apk_url, release_notes, notified_count, created_by)
+                VALUES (?, ?, ?, ?, ?)
+            """, (clean_version, clean_url, notes, results["notifications_sent"], created_by))
+
+        logger.info(f"[APK Update Broadcast] v{clean_version} sent to {results['notifications_sent']} endpoints.")
+    except Exception as e:
+        logger.error(f"[APK Update Broadcast Error] {e}")
+        results["error"] = str(e)
+
+    return results
+
+def get_latest_apk_broadcast() -> Optional[Dict[str, Any]]:
+    """Returns the most recent APK update broadcast from the database."""
+    try:
+        from database import get_db
+        with get_db() as db:
+            cursor = db.cursor()
+            cursor.execute("""
+                SELECT id, version, apk_url, release_notes, notified_count, created_by, created_at
+                FROM apk_update_broadcasts
+                ORDER BY id DESC
+                LIMIT 1
+            """)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        logger.error(f"Error fetching latest apk broadcast: {e}")
+        return None
+

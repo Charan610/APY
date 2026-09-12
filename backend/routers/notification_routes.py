@@ -8,7 +8,8 @@ from notifications import (
     get_vapid_public_key,
     PREBUILT_TIMES,
     send_push_notification,
-    dispatch_scheduled_reminders
+    dispatch_scheduled_reminders,
+    get_latest_apk_broadcast
 )
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -220,3 +221,40 @@ def run_cron_notifications(target_time: Optional[str] = Query(None)):
         "status": "success",
         "execution": result
     }
+
+class DeviceSyncRequest(BaseModel):
+    platform: Optional[str] = "android"
+    app_version: Optional[str] = None
+
+@router.get("/latest-apk")
+def get_latest_apk_info():
+    """Returns the latest APK release info and broadcast status."""
+    latest = get_latest_apk_broadcast()
+    default_version = "1.4.0"
+    default_url = f"https://github.com/Charan610/APY/releases/download/v{default_version}/APY.apk"
+    return {
+        "version": latest["version"] if latest else default_version,
+        "apk_url": latest["apk_url"] if latest else default_url,
+        "release_notes": latest["release_notes"] if latest else "Latest release with performance enhancements and offline resilience.",
+        "published_at": latest["created_at"] if latest else None
+    }
+
+@router.post("/sync-device")
+def sync_user_device(
+    req: DeviceSyncRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Records the user's active device platform and APK version in login_sessions."""
+    user_id = current_user["id"]
+    platform = (req.platform or "android").lower().strip()
+    version = (req.app_version or "").lstrip("v").strip()
+    
+    with get_db() as db:
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE login_sessions
+            SET app_version = ?, last_seen_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND platform = ?
+        """, (version, user_id, platform))
+    return {"status": "success", "recorded_version": version}
+

@@ -94,10 +94,60 @@ export async function initNotificationChannel() {
       lights: true,
       lightColor: '#D97706'
     });
+    await LocalNotifications.createChannel({
+      id: 'apy_app_updates',
+      name: 'App Updates',
+      description: 'Alerts when a new version of the APY APK is available to install',
+      importance: 5, // High / Max
+      visibility: 1, // Public
+      sound: 'default',
+      vibration: true,
+      lights: true,
+      lightColor: '#2563EB'
+    });
   } catch (e) {
     console.warn('Channel creation notice:', e);
   }
 }
+
+export async function pushNativeUpdateNotification(updateInfo) {
+  if (!isNative() || !updateInfo) return;
+  try {
+    const version = updateInfo.latestVersion || updateInfo.tag?.replace(/^v/i, '') || 'New';
+    const apkUrl = updateInfo.apkUrl;
+
+    // Guard: only fire notification once per new version
+    const lastNotified = localStorage.getItem('apy_last_notified_version');
+    if (lastNotified === version) return;
+
+    await initNotificationChannel();
+
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: 9901,
+          title: `🚀 APY Update Available (v${version})`,
+          body: `A new version of APY is ready to install! Tap here to download and update now.`,
+          channelId: 'apy_app_updates',
+          schedule: { at: new Date(Date.now() + 800) },
+          sound: 'default',
+          actionTypeId: 'OPEN_UPDATE',
+          extra: {
+            type: 'apk_update',
+            version: version,
+            url: apkUrl
+          }
+        }
+      ]
+    });
+
+    localStorage.setItem('apy_last_notified_version', version);
+    console.log(`[Push Notification] Fired native APK update notification for v${version}`);
+  } catch (err) {
+    console.warn('Failed to schedule native update notification:', err);
+  }
+}
+
 
 export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) {
   if (isNative()) {

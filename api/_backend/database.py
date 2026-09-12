@@ -478,6 +478,26 @@ def init_db():
                 cursor.execute("ALTER TABLE daily_logs ADD COLUMN notes TEXT;")
             except Exception:
                 pass
+
+            # Safe non-destructive column migration for app_version in login_sessions
+            try:
+                cursor.execute("ALTER TABLE login_sessions ADD COLUMN app_version TEXT;")
+            except Exception:
+                pass
+
+            # APK Update Broadcasts table (Additive for tracking app updates pushed to users)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS apk_update_broadcasts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT NOT NULL,
+                apk_url TEXT NOT NULL,
+                release_notes TEXT,
+                notified_count INTEGER DEFAULT 0,
+                created_by TEXT DEFAULT 'admin',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_broadcast_version ON apk_update_broadcasts(version);")
     except Exception as e:
         print("Init DB notice:", e)
 

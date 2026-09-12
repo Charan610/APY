@@ -14,11 +14,13 @@ import {
   Share2,
   Lock,
   Calendar,
-  Layers
+  Layers,
+  Send,
+  BellRing
 } from 'lucide-react';
 
 export default function AdminModal({ isOpen, onClose, currentUser }) {
-  const [activeTab, setActiveTab] = useState('reset'); // 'reset' | 'logs'
+  const [activeTab, setActiveTab] = useState('reset'); // 'reset' | 'analytics' | 'logs' | 'updates'
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [student, setStudent] = useState(null);
@@ -35,6 +37,14 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   const [logsLoading, setLogsLoading] = useState(false);
   const [platformStats, setPlatformStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+
+  // APK Updates & Push Broadcast State
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [broadcastsLoading, setBroadcastsLoading] = useState(false);
+  const [broadcastVersion, setBroadcastVersion] = useState('1.4.0');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.0/APY.apk');
+  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.0 is now live! Enhanced Target Simulator, Streak Counter, Undo, and faster loading.');
+  const [broadcasting, setBroadcasting] = useState(false);
   
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -68,6 +78,8 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
         loadLogs();
       } else if (activeTab === 'analytics') {
         loadStats();
+      } else if (activeTab === 'updates') {
+        loadBroadcasts();
       }
     }
   }, [isOpen, activeTab]);
@@ -94,6 +106,45 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
       setError(err.message || 'Failed to load platform stats');
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  const loadBroadcasts = async () => {
+    setBroadcastsLoading(true);
+    try {
+      const [bRes, latestRes] = await Promise.all([
+        api.getApkBroadcasts().catch(() => ({ broadcasts: [] })),
+        api.getLatestApkInfo().catch(() => null)
+      ]);
+      setBroadcasts(bRes.broadcasts || []);
+      if (latestRes && latestRes.version) {
+        setBroadcastVersion(latestRes.version);
+        if (latestRes.apk_url) setBroadcastUrl(latestRes.apk_url);
+      }
+    } catch (err) {
+      console.warn('Load broadcasts error:', err);
+    } finally {
+      setBroadcastsLoading(false);
+    }
+  };
+
+  const handlePushBroadcast = async (e) => {
+    if (e) e.preventDefault();
+    setBroadcasting(true);
+    setError('');
+    setMsg('');
+    try {
+      const res = await api.broadcastApkUpdate({
+        version: broadcastVersion,
+        apk_url: broadcastUrl,
+        release_notes: broadcastNotes
+      });
+      setMsg(`🚀 Update notification pushed successfully! Dispatched to ${res.details?.notifications_sent || 0} user endpoints.`);
+      loadBroadcasts();
+    } catch (err) {
+      setError(err.message || 'Failed to broadcast update notification');
+    } finally {
+      setBroadcasting(false);
     }
   };
 
@@ -331,6 +382,25 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
           >
             <Clock size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
             Audit Logs
+          </button>
+          <button
+            type="button"
+            className={`btn ${activeTab === 'updates' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{
+              flex: 1.1,
+              padding: '0.45rem',
+              fontSize: '0.78rem',
+              fontWeight: activeTab === 'updates' ? 700 : 500
+            }}
+            onClick={() => {
+              setActiveTab('updates');
+              setError('');
+              setMsg('');
+              loadBroadcasts();
+            }}
+          >
+            <BellRing size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+            APK Broadcast
           </button>
         </div>
 
@@ -1054,6 +1124,152 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* TAB 4: Broadcast APK Update */}
+        {activeTab === 'updates' && (
+          <div>
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.08), rgba(245, 158, 11, 0.03))',
+              border: '1px solid rgba(217, 119, 6, 0.25)',
+              borderRadius: '12px',
+              padding: '1.25rem',
+              marginBottom: '1.25rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
+                <BellRing size={18} color="var(--accent-gold, #d97706)" />
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--ink)' }}>
+                  Push APK Update Notification to Users
+                </h4>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                Triggering this broadcast pushes an immediate notification to all students who downloaded or are using previous versions of the APY Android app.
+              </p>
+            </div>
+
+            <form onSubmit={handlePushBroadcast} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-soft)', marginBottom: '4px' }}>
+                  Target Version
+                </label>
+                <input
+                  type="text"
+                  value={broadcastVersion}
+                  onChange={(e) => setBroadcastVersion(e.target.value)}
+                  placeholder="e.g. 1.4.0"
+                  required
+                  className="input"
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-soft)', marginBottom: '4px' }}>
+                  APK Download URL
+                </label>
+                <input
+                  type="url"
+                  value={broadcastUrl}
+                  onChange={(e) => setBroadcastUrl(e.target.value)}
+                  placeholder="https://github.com/Charan610/APY/releases/download/v1.4.0/APY.apk"
+                  required
+                  className="input"
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-soft)', marginBottom: '4px' }}>
+                  Release Notes / Alert Message
+                </label>
+                <textarea
+                  value={broadcastNotes}
+                  onChange={(e) => setBroadcastNotes(e.target.value)}
+                  placeholder="What's new in this release..."
+                  rows={3}
+                  className="input"
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.85rem', resize: 'vertical' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={broadcasting}
+                className="btn btn-primary"
+                style={{
+                  padding: '0.75rem',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  background: 'linear-gradient(135deg, #d97706, #b45309)',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: broadcasting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {broadcasting ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    Broadcasting Push Notifications...
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} />
+                    📢 Broadcast Update to All Previous App Users
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div style={{ marginTop: '1rem' }}>
+              <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.5rem' }}>
+                Broadcast History
+              </h4>
+              {broadcastsLoading ? (
+                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--ink-soft)' }}>
+                  Loading history...
+                </div>
+              ) : broadcasts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--ink-soft)', fontSize: '0.8rem', background: 'var(--surface-alt)', borderRadius: '8px' }}>
+                  No previous update broadcasts recorded yet.
+                </div>
+              ) : (
+                <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--rule)', borderRadius: '8px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--rule)', textAlign: 'left' }}>
+                        <th style={{ padding: '0.5rem 0.75rem' }}>Version</th>
+                        <th style={{ padding: '0.5rem 0.75rem' }}>Notified</th>
+                        <th style={{ padding: '0.5rem 0.75rem' }}>Sent By</th>
+                        <th style={{ padding: '0.5rem 0.75rem' }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {broadcasts.map((b) => (
+                        <tr key={b.id} style={{ borderBottom: '1px solid var(--rule)' }}>
+                          <td style={{ padding: '0.5rem 0.75rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                            v{b.version}
+                          </td>
+                          <td style={{ padding: '0.5rem 0.75rem', color: 'var(--accent-gold, #d97706)' }}>
+                            {b.notified_count} users
+                          </td>
+                          <td style={{ padding: '0.5rem 0.75rem', color: 'var(--ink-soft)' }}>
+                            {b.created_by}
+                          </td>
+                          <td style={{ padding: '0.5rem 0.75rem', color: 'var(--ink-soft)' }}>
+                            {b.created_at}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

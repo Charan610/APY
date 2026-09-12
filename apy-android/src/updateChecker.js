@@ -1,4 +1,5 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
+import { pushNativeUpdateNotification } from './notifications';
 
 export const CURRENT_APP_VERSION = '1.4.0';
 export const CURRENT_APP_BUILD_DATE = 'September 12, 2026';
@@ -107,6 +108,8 @@ export async function checkForAppUpdate(force = false) {
       localStorage.setItem(cacheKey, JSON.stringify({ timestamp: now, data: result }));
       if (isNewer) {
         localStorage.setItem('apy_has_update_badge', 'true');
+        // Push native Android status bar notification
+        pushNativeUpdateNotification(result).catch(() => {});
       } else {
         localStorage.removeItem('apy_has_update_badge');
       }
