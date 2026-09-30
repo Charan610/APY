@@ -55,7 +55,7 @@ export default function App() {
     } catch {}
     return 'today';
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !getStoredUser());
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('profile');
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
@@ -63,6 +63,13 @@ export default function App() {
 
   // 1. Initialize Capacitor native controls & persistent session
   useEffect(() => {
+    // Immediate Splash Screen release for instant startup if cached
+    try {
+      if (getStoredUser()) {
+        SplashScreen.hide();
+      }
+    } catch (e) {}
+
     // A. Configure native status bar
     try {
       StatusBar.setBackgroundColor({ color: '#fbf8f1' });
@@ -118,7 +125,16 @@ export default function App() {
       });
     } catch (e) {}
 
+    // Listen for auth expiration events
+    const handleAuthExpired = () => {
+      setUser(null);
+      setAuthToken(null);
+      setStoredUser(null);
+    };
+    window.addEventListener('apy_auth_expired', handleAuthExpired);
+
     return () => {
+      window.removeEventListener('apy_auth_expired', handleAuthExpired);
       if (notifSub) {
         notifSub.then(s => s?.remove?.()).catch(() => {});
       }

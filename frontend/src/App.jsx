@@ -80,6 +80,15 @@ export default function App() {
 
     // Sync device version
     api.syncUserDevice('web', CURRENT_APP_VERSION).catch(() => {});
+
+    // Listen for auth expiration events
+    const handleAuthExpired = () => {
+      setUser(null);
+      setAuthToken(null);
+      setStoredUser(null);
+    };
+    window.addEventListener('apy_auth_expired', handleAuthExpired);
+    return () => window.removeEventListener('apy_auth_expired', handleAuthExpired);
   }, []);
 
   // 3. Live in-app reminder scheduler for active browser tabs & PWAs

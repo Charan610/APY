@@ -7,7 +7,7 @@ from auth import (
     hash_pin, verify_pin, create_access_token, get_current_user,
     check_login_rate_limit, record_failed_attempt, clear_rate_limit,
     is_admin_user, record_login_session, touch_login_session,
-    revoke_session_token, security
+    revoke_session_token, security, invalidate_user_cache
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -75,8 +75,8 @@ class LoginRequest(BaseModel):
         return v.strip().upper()
 
 class UpdateBaselineRequest(BaseModel):
-    baseline_attended: int = Field(..., ge=0)
-    baseline_total: int = Field(..., ge=0)
+    baseline_attended: int = Field(default=0, ge=0)
+    baseline_total: int = Field(default=0, ge=0)
     baseline_date: Optional[str] = None
     section_id: Optional[int] = None
 
@@ -268,7 +268,11 @@ def change_pin(req: ChangePinRequest, current_user: dict = Depends(get_current_u
 
 @router.put("/baseline")
 def update_baseline(req: UpdateBaselineRequest, current_user: dict = Depends(get_current_user)):
-    if req.baseline_total < req.baseline_attended:
+    att = int(req.baseline_attended or 0)
+    tot = int(req.baseline_total or 0)
+    b_date = req.baseline_date.strip() if req.baseline_date and req.baseline_date.strip() else None
+
+    if tot < att:
         raise HTTPException(
             status_code=400,
             detail="Baseline total periods cannot be less than baseline attended periods"
@@ -285,7 +289,7 @@ def update_baseline(req: UpdateBaselineRequest, current_user: dict = Depends(get
                 SET baseline_attended = ?, baseline_total = ?, baseline_date = ?, section_id = ?
                 WHERE id = ?
                 """,
-                (req.baseline_attended, req.baseline_total, req.baseline_date, req.section_id, current_user["id"])
+                (att, tot, b_date, req.section_id, current_user["id"])
             )
         else:
             cursor.execute(
@@ -294,8 +298,9 @@ def update_baseline(req: UpdateBaselineRequest, current_user: dict = Depends(get
                 SET baseline_attended = ?, baseline_total = ?, baseline_date = ?
                 WHERE id = ?
                 """,
-                (req.baseline_attended, req.baseline_total, req.baseline_date, current_user["id"])
+                (att, tot, b_date, current_user["id"])
             )
+        invalidate_user_cache()
         return {"status": "success", "message": "Baseline attendance and section updated"}
 
 @router.put("/section")
@@ -308,6 +313,7 @@ def update_section(req: UpdateSectionRequest, current_user: dict = Depends(get_c
             raise HTTPException(status_code=404, detail="Section not found")
             
         cursor.execute("UPDATE users SET section_id = ? WHERE id = ?", (req.section_id, current_user["id"]))
+        invalidate_user_cache()
         return {
             "status": "success", 
             "message": f"Section updated to {sec['branch']} - {sec['section_label']}",

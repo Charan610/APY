@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../api';
 import { 
   Check, 
@@ -173,8 +173,98 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
     return match ? match.status : null;
   };
 
-  const handleSetBlockStatus = async (blockId, clickedStatus) => {
+  // Debounced, coalesced background sync queue
+  const syncTimeoutRef = useRef(null);
+  const inFlightRef = useRef(false);
+  const pendingPayloadRef = useRef(null);
+
+  // Optimistic summary recalculator: updates percentage and counters instantly (0ms)
+  const computeOptimisticSummary = (blockChanges) => {
+    if (!summary || !summary.overall) return null;
+    const baseSummary = JSON.parse(JSON.stringify(summary));
+    let deltaAttended = 0;
+    let deltaTotal = 0;
+
+    for (const change of blockChanges) {
+      const { periods, oldStatus, newStatus, subject } = change;
+      const oldAtt = oldStatus === 'present' ? periods : 0;
+      const oldTot = (oldStatus === 'present' || oldStatus === 'absent') ? periods : 0;
+      const newAtt = newStatus === 'present' ? periods : 0;
+      const newTot = (newStatus === 'present' || newStatus === 'absent') ? periods : 0;
+
+      const dAtt = newAtt - oldAtt;
+      const dTot = newTot - oldTot;
+
+      deltaAttended += dAtt;
+      deltaTotal += dTot;
+
+      if (subject && baseSummary.subjects && baseSummary.subjects[subject]) {
+        const subj = baseSummary.subjects[subject];
+        subj.attended = Math.max(0, (subj.attended || 0) + dAtt);
+        subj.total = Math.max(0, (subj.total || 0) + dTot);
+        const subjPct = subj.total > 0 ? Math.round((subj.attended / subj.total) * 10000) / 100 : 0;
+        subj.percentage = subjPct;
+        subj.is_below_threshold = subjPct < 75;
+        subj.safe_to_miss = subjPct >= 75 ? Math.max(0, Math.floor((subj.attended / 0.75) - subj.total)) : 0;
+        subj.must_attend_next = subjPct < 75 ? Math.max(0, Math.ceil((0.75 * subj.total - subj.attended) / 0.25)) : 0;
+      }
+    }
+
+    const ov = baseSummary.overall;
+    ov.attended = Math.max(0, (ov.attended || 0) + deltaAttended);
+    ov.total = Math.max(0, (ov.total || 0) + deltaTotal);
+    ov.logged_attended = Math.max(0, (ov.logged_attended || 0) + deltaAttended);
+    ov.logged_total = Math.max(0, (ov.logged_total || 0) + deltaTotal);
+
+    const pct = ov.total > 0 ? Math.round((ov.attended / ov.total) * 10000) / 100 : 0;
+    ov.percentage = pct;
+    ov.is_below_threshold = pct < 75;
+    ov.safe_to_miss = pct >= 75 ? Math.max(0, Math.floor((ov.attended / 0.75) - ov.total)) : 0;
+    ov.must_attend_next = pct < 75 ? Math.max(0, Math.ceil((0.75 * ov.total - ov.attended) / 0.25)) : 0;
+
+    return baseSummary;
+  };
+
+  const queueBackgroundSync = (date, entries) => {
+    // 1. Immediately cache logs to localStorage (0ms persistence)
+    try {
+      const currentStored = JSON.parse(localStorage.getItem('apy_logs_cache') || '{}');
+      currentStored[date] = entries;
+      localStorage.setItem('apy_logs_cache', JSON.stringify(currentStored));
+    } catch {}
+
+    pendingPayloadRef.current = { date, entries };
+    setSaving(true);
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      while (pendingPayloadRef.current) {
+        const { date: reqDate, entries: reqEntries } = pendingPayloadRef.current;
+        pendingPayloadRef.current = null;
+        try {
+          const res = await api.markAttendance(reqDate, reqEntries);
+          if (res?.summary && onAttendanceUpdated) {
+            onAttendanceUpdated(res.summary);
+          }
+        } catch (err) {
+          console.error('Background sync notice:', err);
+        }
+      }
+      inFlightRef.current = false;
+      setSaving(false);
+    }, 120);
+  };
+
+  const handleSetBlockStatus = (blockId, clickedStatus) => {
     if (!isDateEditable) return;
+
+    const block = currentBlocks.find(b => b.id === blockId);
+    if (!block) return;
 
     const currentStatus = getBlockStatus(blockId);
     const targetStatus = (currentStatus === clickedStatus) ? 'unmarked' : clickedStatus;
@@ -183,7 +273,7 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
     const prevEntries = dailyLogs[currentDate] ? [...dailyLogs[currentDate]] : [];
     setUndoAction({ date: currentDate, entries: prevEntries });
 
-    // Optimistic UI update
+    // 0ms Optimistic UI update
     const currentEntries = [...prevEntries];
     const idx = currentEntries.findIndex(e => e.block_id === blockId);
     if (targetStatus === 'unmarked') {
@@ -198,26 +288,24 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
 
     setDailyLogs(prev => ({ ...prev, [currentDate]: currentEntries }));
     setFeedback(targetStatus === 'unmarked' ? 'Unmarked' : `Saved ${targetStatus.toUpperCase()}`);
-    setTimeout(() => setFeedback(''), 2500);
+    setTimeout(() => setFeedback(''), 2000);
 
-    try {
-      const res = await api.markAttendance(currentDate, [{ 
-        block_id: blockId, 
-        status: targetStatus, 
-        notes: dayRemarks || null 
-      }]);
-      if (res?.summary) {
-        onAttendanceUpdated(res.summary);
-      } else {
-        onAttendanceUpdated();
-      }
-    } catch (err) {
-      console.error('Failed to save attendance:', err);
-      loadLogs();
+    // 0ms Optimistic Summary update
+    const optimisticSummary = computeOptimisticSummary([{
+      periods: block.periods,
+      oldStatus: currentStatus,
+      newStatus: targetStatus,
+      subject: block.subject
+    }]);
+    if (optimisticSummary && onAttendanceUpdated) {
+      onAttendanceUpdated(optimisticSummary);
     }
+
+    // Background sync: send full updated day entries for total reliability
+    queueBackgroundSync(currentDate, currentEntries);
   };
 
-  const handleMarkAll = async (status) => {
+  const handleMarkAll = (status) => {
     if (!isDateEditable || currentBlocks.length === 0) return;
 
     const prevEntries = dailyLogs[currentDate] ? [...dailyLogs[currentDate]] : [];
@@ -228,57 +316,68 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
       status, 
       notes: dayRemarks || null 
     }));
+
+    // 0ms Optimistic state update
     setDailyLogs(prev => ({ ...prev, [currentDate]: entries }));
     setFeedback(`Marked All ${status.toUpperCase()}`);
-    setTimeout(() => setFeedback(''), 2500);
+    setTimeout(() => setFeedback(''), 2000);
 
-    try {
-      setSaving(true);
-      const res = await api.markAttendance(currentDate, entries);
-      if (res?.summary) {
-        onAttendanceUpdated(res.summary);
-      } else {
-        onAttendanceUpdated();
-      }
-    } catch (err) {
-      alert(err.message || 'Failed to mark all');
-      loadLogs();
-    } finally {
-      setSaving(false);
+    // 0ms Optimistic Summary recalculation for all blocks
+    const changes = currentBlocks.map(b => {
+      const match = prevEntries.find(p => p.block_id === b.id);
+      return {
+        periods: b.periods,
+        oldStatus: match ? match.status : null,
+        newStatus: status,
+        subject: b.subject
+      };
+    });
+    const optimisticSummary = computeOptimisticSummary(changes);
+    if (optimisticSummary && onAttendanceUpdated) {
+      onAttendanceUpdated(optimisticSummary);
     }
+
+    // Queue non-blocking background sync
+    queueBackgroundSync(currentDate, entries);
   };
 
-  const handleUndo = async () => {
+  const handleUndo = () => {
     if (!undoAction || undoAction.date !== currentDate) return;
     const restored = undoAction.entries;
+    const currentList = dailyLogs[currentDate] || [];
+
     setDailyLogs(prev => ({ ...prev, [currentDate]: restored }));
     setUndoAction(null);
     setFeedback('Reverted change');
     setTimeout(() => setFeedback(''), 1500);
 
-    try {
-      setSaving(true);
-      // Construct restoration payload: all section blocks
-      const payload = currentBlocks.map(b => {
-        const match = restored.find(r => r.block_id === b.id);
-        return {
-          block_id: b.id,
-          status: match ? match.status : 'unmarked',
-          notes: match?.notes || null
-        };
-      });
-      const res = await api.markAttendance(currentDate, payload);
-      if (res?.summary) onAttendanceUpdated(res.summary);
-      else onAttendanceUpdated();
-    } catch (err) {
-      console.error('Undo failed:', err);
-      loadLogs();
-    } finally {
-      setSaving(false);
+    const changes = currentBlocks.map(b => {
+      const oldMatch = currentList.find(c => c.block_id === b.id);
+      const newMatch = restored.find(r => r.block_id === b.id);
+      return {
+        periods: b.periods,
+        oldStatus: oldMatch ? oldMatch.status : null,
+        newStatus: newMatch ? newMatch.status : 'unmarked',
+        subject: b.subject
+      };
+    });
+    const optimisticSummary = computeOptimisticSummary(changes);
+    if (optimisticSummary && onAttendanceUpdated) {
+      onAttendanceUpdated(optimisticSummary);
     }
+
+    const payload = currentBlocks.map(b => {
+      const match = restored.find(r => r.block_id === b.id);
+      return {
+        block_id: b.id,
+        status: match ? match.status : 'unmarked',
+        notes: match?.notes || null
+      };
+    });
+    queueBackgroundSync(currentDate, payload);
   };
 
-  const handleSaveRemarks = async () => {
+  const handleSaveRemarks = () => {
     const entries = dailyLogs[currentDate] || [];
     if (entries.length === 0) {
       setShowRemarkInput(false);
@@ -288,15 +387,12 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
     setDailyLogs(prev => ({ ...prev, [currentDate]: updatedEntries }));
     setFeedback('Remarks Saved');
     setTimeout(() => setFeedback(''), 1500);
-    try {
-      await api.markAttendance(currentDate, updatedEntries.map(e => ({
-        block_id: e.block_id,
-        status: e.status,
-        notes: dayRemarks || null
-      })));
-    } catch (e) {
-      console.error(e);
-    }
+
+    queueBackgroundSync(currentDate, updatedEntries.map(e => ({
+      block_id: e.block_id,
+      status: e.status,
+      notes: dayRemarks || null
+    })));
   };
 
   return (
@@ -395,13 +491,13 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
             </div>
 
             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('present')} disabled={saving}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('present')}>
                 <CheckCheck size={14} color="var(--good)" /> All Present
               </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('absent')} disabled={saving}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('absent')}>
                 <UserX size={14} color="var(--bad)" /> All Absent
               </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('holiday')} disabled={saving}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('holiday')}>
                 <Coffee size={14} color="var(--accent-gold)" /> Day Holiday
               </button>
             </div>
@@ -474,7 +570,7 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
                       type="button"
                       className={`status-pill-btn ${status === 'present' ? 'active-present' : ''}`}
                       onClick={() => handleSetBlockStatus(block.id, 'present')}
-                      disabled={!isDateEditable || saving}
+                      disabled={!isDateEditable}
                     >
                       PRESENT
                     </button>
@@ -482,7 +578,7 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
                       type="button"
                       className={`status-pill-btn ${status === 'absent' ? 'active-absent' : ''}`}
                       onClick={() => handleSetBlockStatus(block.id, 'absent')}
-                      disabled={!isDateEditable || saving}
+                      disabled={!isDateEditable}
                     >
                       ABSENT
                     </button>

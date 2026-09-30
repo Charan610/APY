@@ -13,15 +13,33 @@ export function setApiBase(url) {
   }
 }
 
+let inMemoryToken = null;
+try {
+  const t = localStorage.getItem('attendance_jwt_token');
+  if (t && t !== 'undefined' && t !== 'null') inMemoryToken = t.trim();
+} catch {}
+
 export function getAuthToken() {
-  return localStorage.getItem('attendance_jwt_token');
+  if (inMemoryToken && inMemoryToken !== 'undefined' && inMemoryToken !== 'null') {
+    return inMemoryToken;
+  }
+  try {
+    const token = localStorage.getItem('attendance_jwt_token');
+    if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
+      inMemoryToken = token.trim();
+      return inMemoryToken;
+    }
+  } catch {}
+  return null;
 }
 
 export function setAuthToken(token) {
-  if (token) {
-    localStorage.setItem('attendance_jwt_token', token);
+  if (token && token !== 'undefined' && token !== 'null' && String(token).trim() !== '') {
+    inMemoryToken = String(token).trim();
+    try { localStorage.setItem('attendance_jwt_token', inMemoryToken); } catch {}
   } else {
-    localStorage.removeItem('attendance_jwt_token');
+    inMemoryToken = null;
+    try { localStorage.removeItem('attendance_jwt_token'); } catch {}
   }
 }
 
@@ -34,15 +52,23 @@ export function checkIsAdmin(user) {
   return ADMIN_REGISTER_NUMBERS.includes(reg);
 }
 
+let inMemoryUser = null;
+try {
+  const u = localStorage.getItem('attendance_user');
+  if (u) inMemoryUser = JSON.parse(u);
+} catch {}
+
 export function getStoredUser() {
-  const userStr = localStorage.getItem('attendance_user');
-  if (!userStr) return null;
+  if (inMemoryUser) return inMemoryUser;
   try {
+    const userStr = localStorage.getItem('attendance_user');
+    if (!userStr) return null;
     const user = JSON.parse(userStr);
     if (user && typeof user === 'object') {
       user.is_admin = checkIsAdmin(user);
+      inMemoryUser = user;
     }
-    return user;
+    return inMemoryUser;
   } catch {
     return null;
   }
@@ -54,9 +80,11 @@ export function setStoredUser(user) {
       ...user,
       is_admin: checkIsAdmin(user)
     };
-    localStorage.setItem('attendance_user', JSON.stringify(enrichedUser));
+    inMemoryUser = enrichedUser;
+    try { localStorage.setItem('attendance_user', JSON.stringify(enrichedUser)); } catch {}
   } else {
-    localStorage.removeItem('attendance_user');
+    inMemoryUser = null;
+    try { localStorage.removeItem('attendance_user'); } catch {}
   }
 }
 
@@ -76,7 +104,13 @@ async function request(endpoint, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+    const err = new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+    err.status = response.status;
+    err.detail = data.detail;
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('apy_auth_expired', { detail: { message: data.detail } }));
+    }
+    throw err;
   }
   return data;
 }

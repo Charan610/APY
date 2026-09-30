@@ -35,12 +35,37 @@ export function setApiBase(url) {
   }
 }
 
+let inMemoryToken = null;
+try {
+  const t = localStorage.getItem('attendance_jwt_token');
+  if (t && t !== 'undefined' && t !== 'null') inMemoryToken = t.trim();
+} catch {}
+
 export function getAuthToken() {
-  return localStorage.getItem('attendance_jwt_token');
+  if (inMemoryToken && inMemoryToken !== 'undefined' && inMemoryToken !== 'null') {
+    return inMemoryToken;
+  }
+  try {
+    const token = localStorage.getItem('attendance_jwt_token');
+    if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '') {
+      inMemoryToken = token.trim();
+      return inMemoryToken;
+    }
+  } catch {}
+  return null;
 }
 
 export function setAuthToken(token) {
-  nativeStorage.setToken(token);
+  if (token && token !== 'undefined' && token !== 'null' && String(token).trim() !== '') {
+    const clean = String(token).trim();
+    inMemoryToken = clean;
+    try { localStorage.setItem('attendance_jwt_token', clean); } catch {}
+    nativeStorage.setToken(clean);
+  } else {
+    inMemoryToken = null;
+    try { localStorage.removeItem('attendance_jwt_token'); } catch {}
+    nativeStorage.setToken(null);
+  }
 }
 
 export const ADMIN_REGISTER_NUMBERS = ['25B91A05D8', '23B91A05C0', '23B91A0588', '23B91A0577'];
@@ -52,15 +77,23 @@ export function checkIsAdmin(user) {
   return ADMIN_REGISTER_NUMBERS.includes(reg);
 }
 
+let inMemoryUser = null;
+try {
+  const u = localStorage.getItem('attendance_user');
+  if (u) inMemoryUser = JSON.parse(u);
+} catch {}
+
 export function getStoredUser() {
-  const user = localStorage.getItem('attendance_user');
-  if (!user) return null;
+  if (inMemoryUser) return inMemoryUser;
   try {
+    const user = localStorage.getItem('attendance_user');
+    if (!user) return null;
     const u = JSON.parse(user);
     if (u && typeof u === 'object') {
       u.is_admin = checkIsAdmin(u);
+      inMemoryUser = u;
     }
-    return u;
+    return inMemoryUser;
   } catch {
     return null;
   }
@@ -72,8 +105,12 @@ export function setStoredUser(user) {
       ...user,
       is_admin: checkIsAdmin(user)
     };
+    inMemoryUser = enriched;
+    try { localStorage.setItem('attendance_user', JSON.stringify(enriched)); } catch {}
     nativeStorage.setUser(enriched);
   } else {
+    inMemoryUser = null;
+    try { localStorage.removeItem('attendance_user'); } catch {}
     nativeStorage.setUser(null);
   }
 }
@@ -97,7 +134,13 @@ async function request(endpoint, options = {}, retried = false) {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+      const err = new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+      err.status = response.status;
+      err.detail = data.detail;
+      if (response.status === 401 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('apy_auth_expired', { detail: { message: data.detail } }));
+      }
+      throw err;
     }
     return data;
   } catch (err) {

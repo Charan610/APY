@@ -81,6 +81,9 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
   const [backupLoading, setBackupLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+  const [showReauthPrompt, setShowReauthPrompt] = useState(false);
+  const [reauthPin, setReauthPin] = useState('');
+  const [reauthLoading, setReauthLoading] = useState(false);
 
   // Reminders state
   const [notifLoading, setNotifLoading] = useState(false);
@@ -211,14 +214,15 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
 
   // --- Profile Handlers ---
   const handleSaveProfile = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setError('');
     setMsg('');
+    setShowReauthPrompt(false);
     setLoading(true);
 
     try {
-      const att = parseInt(attended) || 0;
-      const tot = parseInt(total) || 0;
+      const att = parseInt(attended, 10) || 0;
+      const tot = parseInt(total, 10) || 0;
 
       if (tot < att) {
         setError('Baseline total periods cannot be less than attended.');
@@ -229,7 +233,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
       await api.updateBaseline({
         baseline_attended: att,
         baseline_total: tot,
-        baseline_date: tot > 0 ? bDate : null,
+        baseline_date: tot > 0 ? (bDate || null) : null,
+        section_id: selectedSectionId !== user?.section_id ? selectedSectionId : undefined,
       });
 
       if (selectedSectionId !== user?.section_id) {
@@ -243,9 +248,66 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
         onUserUpdated(freshUser.user);
       }
     } catch (err) {
-      setError(err.message || 'Failed to update settings');
+      const errMsg = err.message || '';
+      if (errMsg.toLowerCase().includes('credentials') || errMsg.toLowerCase().includes('expired') || errMsg.toLowerCase().includes('sign in') || errMsg.toLowerCase().includes('auth') || err.status === 401) {
+        setShowReauthPrompt(true);
+        setError('Your login session has expired. Please enter your 4-digit PIN below to save your baseline.');
+      } else {
+        setError(errMsg || 'Failed to update settings');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReauthAndSave = async (e) => {
+    if (e) e.preventDefault();
+    if (!reauthPin || reauthPin.length < 4) {
+      setError('Please enter your 4-digit PIN.');
+      return;
+    }
+    setReauthLoading(true);
+    setError('');
+    try {
+      const loginRes = await api.login({
+        register_number: user?.register_number,
+        pin: reauthPin
+      });
+      if (loginRes?.token) {
+        setAuthToken(loginRes.token);
+        if (loginRes.user) {
+          setStoredUser(loginRes.user);
+          if (onUserUpdated) onUserUpdated(loginRes.user);
+        }
+        setShowReauthPrompt(false);
+        setReauthPin('');
+        
+        // Now safely re-run save profile
+        const att = parseInt(attended, 10) || 0;
+        const tot = parseInt(total, 10) || 0;
+        await api.updateBaseline({
+          baseline_attended: att,
+          baseline_total: tot,
+          baseline_date: tot > 0 ? (bDate || null) : null,
+          section_id: selectedSectionId !== user?.section_id ? selectedSectionId : undefined,
+        });
+
+        if (selectedSectionId !== user?.section_id) {
+          await api.updateSection(selectedSectionId);
+        }
+
+        setMsg('Identity verified! Profile, Section & Baseline updated successfully!');
+        const freshUser = await api.getMe();
+        if (freshUser?.user && onUserUpdated) {
+          onUserUpdated(freshUser.user);
+        }
+      } else {
+        throw new Error('Authentication failed. Please verify your PIN.');
+      }
+    } catch (reErr) {
+      setError(reErr.message || 'Incorrect PIN. Please try again.');
+    } finally {
+      setReauthLoading(false);
     }
   };
 
@@ -756,6 +818,45 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           <div className="alert-callout error" style={{ marginBottom: '1rem' }}>
             <AlertCircle size={16} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Quick PIN Verification Prompt if session expires */}
+        {showReauthPrompt && (
+          <div style={{
+            background: 'var(--surface-alt)',
+            border: '1.5px solid var(--accent-gold, #d97706)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.85rem',
+            marginBottom: '1rem'
+          }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.35rem' }}>
+              🔑 Enter PIN to Save Baseline
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: '0.65rem' }}>
+              Enter the 4-digit PIN for <strong>{user?.register_number}</strong> to re-authenticate and immediately apply your baseline changes without losing your input:
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="password"
+                maxLength={6}
+                placeholder="4-digit PIN"
+                className="form-control mono"
+                style={{ flex: 1, letterSpacing: '0.2rem', textAlign: 'center', fontSize: '1rem' }}
+                value={reauthPin}
+                onChange={(e) => setReauthPin(e.target.value.replace(/\D/g, ''))}
+                autoFocus
+              />
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleReauthAndSave}
+                disabled={reauthLoading || reauthPin.length < 4}
+                style={{ fontWeight: 700 }}
+              >
+                {reauthLoading ? 'Verifying...' : 'Verify & Save'}
+              </button>
+            </div>
           </div>
         )}
 

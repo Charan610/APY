@@ -1,6 +1,7 @@
 import math
 import csv
 import io
+import time
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Dict
 from fastapi import APIRouter, HTTPException, Depends, Query, status
@@ -8,6 +9,18 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from database import get_db
 from auth import get_current_user
+
+# In-memory timetable blocks cache per section (5 min TTL)
+_SECTION_BLOCKS_CACHE: Dict[int, tuple] = {}
+
+def get_section_block_ids(cursor, section_id: int) -> set:
+    cached = _SECTION_BLOCKS_CACHE.get(section_id)
+    if cached and (time.time() - cached[0]) < 300:
+        return cached[1]
+    cursor.execute("SELECT id FROM timetable_blocks WHERE section_id = ?", (section_id,))
+    block_ids = {r["id"] for r in cursor.fetchall()}
+    _SECTION_BLOCKS_CACHE[section_id] = (time.time(), block_ids)
+    return block_ids
 
 try:
     from zoneinfo import ZoneInfo
@@ -220,9 +233,8 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # 1. Verify all block IDs in a single batch query
-        cursor.execute("SELECT id FROM timetable_blocks WHERE section_id = ?", (section_id,))
-        valid_block_ids = {r["id"] for r in cursor.fetchall()}
+        # 1. Verify all block IDs with fast in-memory cache
+        valid_block_ids = get_section_block_ids(cursor, section_id)
         
         unmarked_entries = []
         active_entries = []

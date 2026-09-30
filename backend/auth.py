@@ -23,9 +23,20 @@ except Exception:
 
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", os.environ.get("SECRET_KEY", "cse-attendance-ledger-jwt-secret-key-2026"))
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 7  # 7 days expiry
+TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 180  # 180 days expiry (semester long)
 
 security = HTTPBearer(auto_error=False)
+
+# Fast in-memory user authentication cache to eliminate repeated Turso/SQLite lookups
+_AUTH_USER_CACHE: Dict[str, tuple] = {}  # token_hash -> (timestamp, user_dict)
+AUTH_CACHE_TTL_SECONDS = 60.0
+
+def invalidate_user_cache(token_hash: Optional[str] = None):
+    """Invalidates the in-memory user authentication cache."""
+    if token_hash:
+        _AUTH_USER_CACHE.pop(token_hash, None)
+    else:
+        _AUTH_USER_CACHE.clear()
 
 # Failed PIN attempts by register_number
 # Structure: { reg: {"attempts": [timestamp, ...], "locked_until": timestamp | None} }
@@ -183,7 +194,21 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Please sign in."
         )
-    token = credentials.credentials
+    token = credentials.credentials.strip()
+    if not token or token in ("null", "undefined"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please sign in."
+        )
+
+    t_hash = hash_token(token)
+
+    # 0. Check fast in-memory cache first (0ms latency, eliminates repeated Turso queries)
+    cached = _AUTH_USER_CACHE.get(t_hash)
+    if cached and (time.time() - cached[0]) < AUTH_CACHE_TTL_SECONDS:
+        touch_login_session(cached[1]["id"], token=token)
+        return cached[1]
+
     try:
         if jwt is not None:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -198,19 +223,24 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
             if int(payload.get("exp", 0)) < int(time.time()):
                 raise ValueError("Token expired")
         sub_val = payload.get("sub")
-        if sub_val is None or str(sub_val) == "None":
+        if sub_val is None or str(sub_val) in ("None", ""):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token claims"
             )
         user_id = int(sub_val)
-    except Exception:
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "expired" in err_msg:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired. Please sign in again with your PIN."
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
         )
         
-    t_hash = hash_token(token)
     with get_db() as conn:
         cursor = conn.cursor()
         # Server-side logout verification
@@ -258,7 +288,10 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
             )
         user_dict = dict(user)
         user_dict["is_admin"] = is_admin_user(user_dict.get("register_number"))
-        touch_login_session(user_id, token=token)
+        
+        # Cache authenticated user in memory for subsequent requests
+        _AUTH_USER_CACHE[t_hash] = (time.time(), user_dict)
+        touch_login_session(user_id, token=token, db_conn=conn)
         return user_dict
 
 def hash_token(token: str) -> str:
@@ -329,9 +362,17 @@ def record_login_session(user_id: int, platform: Optional[str], token: str, db_c
     except Exception as e:
         print("Record login session notice:", e)
 
+_LAST_TOUCH: Dict[str, float] = {}
+
 def touch_login_session(user_id: int, token: Optional[str] = None, platform: Optional[str] = None, db_conn=None):
-    """Updates last_seen_at for the active user session."""
+    """Updates last_seen_at for the active user session with 5-minute throttling to avoid redundant DB roundtrips."""
     try:
+        t_key = token or f"{user_id}_{platform}"
+        now = time.time()
+        if now - _LAST_TOUCH.get(t_key, 0) < 300:  # 5 minutes throttle
+            return
+        _LAST_TOUCH[t_key] = now
+
         if db_conn is not None:
             cursor = db_conn.cursor()
             if token:
@@ -349,7 +390,7 @@ def touch_login_session(user_id: int, token: Optional[str] = None, platform: Opt
                 elif platform:
                     clean_platform = platform.lower().strip()
                     cursor.execute("UPDATE login_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE user_id = ? AND platform = ?", (user_id, clean_platform))
-    except Exception as e:
+    except Exception:
         pass
 
 def get_admin_register_numbers() -> set:
