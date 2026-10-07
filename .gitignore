@@ -27,3 +27,4 @@ api/backend/backups/
 *.pem
 .DS_Store
 Thumbs.db
+*.idsig
