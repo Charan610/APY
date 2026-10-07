@@ -65,22 +65,8 @@ export default function App() {
   const headerLogoRef = useRef(null);
   const attendanceTargetRef = useRef(null);
   const todayAttendanceRef = attendanceTargetRef;
-  const [hasPlayedIntro, setHasPlayedIntro] = useState(() => {
-    try {
-      return sessionStorage.getItem('apy_intro_played') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const [introStage, setIntroStage] = useState(() => {
-    try {
-      if (sessionStorage.getItem('apy_intro_played') === 'true') {
-        return 'complete';
-      }
-    } catch {}
-    return 'logo-center';
-  });
+  const [hasPlayedIntro, setHasPlayedIntro] = useState(false);
+  const [introStage, setIntroStage] = useState('logo-center');
 
   // Continuous unified intro timeline
   useEffect(() => {
@@ -103,9 +89,6 @@ export default function App() {
     const t4 = setTimeout(() => {
       setIntroStage('complete');
       setHasPlayedIntro(true);
-      try {
-        sessionStorage.setItem('apy_intro_played', 'true');
-      } catch {}
     }, 3500);
 
     return () => {

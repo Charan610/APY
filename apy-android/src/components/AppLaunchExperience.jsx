@@ -18,6 +18,7 @@ export default function AppLaunchExperience({
   const [logoFlyStyle, setLogoFlyStyle] = useState({});
   const [cardFlyStyle, setCardFlyStyle] = useState({});
   const [displayedPct, setDisplayedPct] = useState(0);
+  const [showRingPhase, setShowRingPhase] = useState(false);
   const cardRef = useRef(null);
 
   // Real attendance values
@@ -97,6 +98,19 @@ export default function AppLaunchExperience({
     };
   }, [introStage, overallPct]);
 
+  // Sequential reveal: wave draws first (0-750ms), then smoothly morphs to circular ring
+  useEffect(() => {
+    if (introStage === 'attendance-large') {
+      setShowRingPhase(false);
+      const timer = setTimeout(() => {
+        setShowRingPhase(true);
+      }, 750);
+      return () => clearTimeout(timer);
+    } else if (introStage === 'attendance-shrink' || introStage === 'complete') {
+      setShowRingPhase(true);
+    }
+  }, [introStage]);
+
   if (introStage === 'complete') return null;
 
   const largeRadius = 66;
@@ -133,7 +147,7 @@ export default function AppLaunchExperience({
           </div>
 
           <div className="intro-card-visual-area">
-            {/* SVG Background: Pulse Line & Circular Ring */}
+            {/* SVG Background: Flowing Wave (Phase 1) THEN Circular Ring (Phase 2) */}
             <svg className="intro-card-svg" viewBox="0 0 280 180" fill="none">
               <defs>
                 <linearGradient id="intro-ring-grad" x1="0" y1="1" x2="1" y2="0">
@@ -143,28 +157,36 @@ export default function AppLaunchExperience({
                 </linearGradient>
               </defs>
 
-              {/* Golden elegant flowing wave line */}
+              {/* Golden elegant flowing wave line: draws in Phase 1, fades cleanly out in Phase 2 */}
               <path
                 className="intro-pulse-trace"
-                d="M 15 135 C 50 110, 85 160, 120 135 C 145 118, 170 152, 195 135 C 220 120, 245 150, 268 135"
+                d="M 25 132 C 60 110, 95 152, 130 132 C 150 120, 175 144, 200 132 C 225 120, 245 142, 260 132"
                 stroke="#c5a059"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                style={{
+                  opacity: showRingPhase ? 0 : 1,
+                  transition: 'opacity 0.35s ease'
+                }}
               />
 
-              {/* Progress ring wrapping around the percentage */}
+              {/* Progress ring wrapping around the percentage: reveals in Phase 2 */}
               <circle
                 className="intro-ring-circle"
                 cx="140"
-                cy="92"
+                cy="88"
                 r={largeRadius}
                 stroke="url(#intro-ring-grad)"
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 strokeDasharray={largeCircumference}
                 strokeDashoffset={ringOffset}
-                transform="rotate(-90 140 92)"
+                transform="rotate(-90 140 88)"
+                style={{
+                  opacity: showRingPhase ? 1 : 0,
+                  transition: 'opacity 0.4s ease, stroke-dashoffset 0.85s cubic-bezier(0.22, 1, 0.36, 1)'
+                }}
               />
             </svg>
 
@@ -173,7 +195,14 @@ export default function AppLaunchExperience({
               <div className="intro-big-pct font-serif">
                 {displayedPct.toFixed(1)}%
               </div>
-              <div className="intro-counts-sub">
+              <div 
+                className="intro-counts-sub"
+                style={{
+                  opacity: showRingPhase ? 1 : 0,
+                  transform: showRingPhase ? 'translateY(0)' : 'translateY(6px)',
+                  transition: 'opacity 0.4s ease, transform 0.4s ease'
+                }}
+              >
                 {attendedCount} Present · {absentCount} Absent
               </div>
             </div>

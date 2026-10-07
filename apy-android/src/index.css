@@ -58,6 +58,11 @@
   padding: 0;
 }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 body {
   background-color: var(--bg);
   color: var(--ink);
@@ -98,6 +103,7 @@ h1, h2, h3, h4, .heading-ledger {
   min-height: 100vh;
   padding: 1rem 1rem 6.5rem 1rem;
   position: relative;
+  overflow-x: hidden;
   border-left: 1px solid var(--rule);
   border-right: 1px solid var(--rule);
   background-color: var(--bg);
@@ -927,13 +933,21 @@ h1, h2, h3, h4, .heading-ledger {
 }
 
 /* =========================================================
-   QUICK ACTION CARDS (4 IN A ROW)
+   QUICK ACTION CARDS (RESPONSIVE 2-COL ON MOBILE, 4-COL ON DESKTOP)
    ========================================================= */
 .quick-actions-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.55rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.65rem;
   margin-bottom: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 580px) {
+  .quick-actions-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .quick-action-card {
@@ -949,6 +963,9 @@ h1, h2, h3, h4, .heading-ledger {
   transition: all 0.18s cubic-bezier(0.2, 0.8, 0.4, 1);
   position: relative;
   min-height: 84px;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .quick-action-card:hover {
