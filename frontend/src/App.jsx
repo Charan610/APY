@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { api, getStoredUser, setAuthToken, setStoredUser, checkIsAdmin } from './api';
 import Header from './components/Header';
 import AuthModal from './components/AuthModal';
@@ -6,13 +6,14 @@ import TodayTab from './components/TodayTab';
 import DashboardTab from './components/DashboardTab';
 import TimetableTab from './components/TimetableTab';
 import ForecastTab from './components/ForecastTab';
-import SettingsModal from './components/SettingsModal';
-import NotificationPromptModal from './components/NotificationPromptModal';
-import AdminModal from './components/AdminModal';
 import OfflineBanner from './components/OfflineBanner';
 import { registerServiceWorker } from './notifications';
 import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
 import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
+
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const NotificationPromptModal = lazy(() => import('./components/NotificationPromptModal'));
+const AdminModal = lazy(() => import('./components/AdminModal'));
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
@@ -49,7 +50,7 @@ export default function App() {
     } catch {}
     return 'today';
   });
-  const [loading, setLoading] = useState(() => !getStoredUser());
+  const [loading, setLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('profile');
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
@@ -165,6 +166,12 @@ export default function App() {
   };
 
   const initSession = async () => {
+    // Immediate dismissal: never block UI on remote requests
+    setLoading(false);
+
+    const token = getAuthToken();
+    if (!token) return;
+
     try {
       // Parallelize profile verification & summary fetching in background
       const [userData, summaryData] = await Promise.all([
@@ -186,20 +193,9 @@ export default function App() {
           } catch {}
         }
         checkNotificationPromptEligibility();
-      } else if (!getStoredUser()) {
-        setUser(null);
-        setAuthToken(null);
-        setStoredUser(null);
-        try { localStorage.removeItem('apy_summary_cache'); } catch {}
       }
     } catch (err) {
-      if (!getStoredUser()) {
-        setUser(null);
-        setAuthToken(null);
-        setStoredUser(null);
-      }
-    } finally {
-      setLoading(false);
+      // Ignore transient errors; user continues using cached credentials
     }
   };
 
@@ -438,39 +434,43 @@ export default function App() {
             )}
           </nav>
 
-          {/* Post-Login One-Time Reminder Prompt */}
-          <NotificationPromptModal
-            isOpen={showNotifPrompt}
-            onClose={() => setShowNotifPrompt(false)}
-            onConfigUpdated={() => {
-              setShowNotifPrompt(false);
-            }}
-          />
+          {/* Lazy-Loaded Dialogs and Modals */}
+          <Suspense fallback={null}>
+            {showNotifPrompt && (
+              <NotificationPromptModal
+                isOpen={showNotifPrompt}
+                onClose={() => setShowNotifPrompt(false)}
+                onConfigUpdated={() => {
+                  setShowNotifPrompt(false);
+                }}
+              />
+            )}
 
-          {/* Settings Modal */}
-          <SettingsModal
-            isOpen={showSettings}
-            initialTab={settingsTab}
-            onClose={() => setShowSettings(false)}
-            user={user}
-            onOpenAdmin={() => setShowAdminModal(true)}
-            onUserUpdated={(updatedUser) => {
-              if (updatedUser) {
-                setUser(updatedUser);
-                setStoredUser(updatedUser);
-              }
-              initSession();
-            }}
-          />
+            {showSettings && (
+              <SettingsModal
+                isOpen={showSettings}
+                initialTab={settingsTab}
+                onClose={() => setShowSettings(false)}
+                user={user}
+                onOpenAdmin={() => setShowAdminModal(true)}
+                onUserUpdated={(updatedUser) => {
+                  if (updatedUser) {
+                    setUser(updatedUser);
+                    setStoredUser(updatedUser);
+                  }
+                  initSession();
+                }}
+              />
+            )}
 
-          {/* Admin Modal (Restricted to Authorized Admins) */}
-          {checkIsAdmin(user) && (
-            <AdminModal
-              isOpen={showAdminModal}
-              onClose={() => setShowAdminModal(false)}
-              currentUser={user}
-            />
-          )}
+            {checkIsAdmin(user) && showAdminModal && (
+              <AdminModal
+                isOpen={showAdminModal}
+                onClose={() => setShowAdminModal(false)}
+                currentUser={user}
+              />
+            )}
+          </Suspense>
         </>
       )}
     </div>

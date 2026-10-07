@@ -1,8 +1,8 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
 import { pushNativeUpdateNotification } from './notifications';
 
-export const CURRENT_APP_VERSION = '1.4.0';
-export const CURRENT_APP_BUILD_DATE = 'September 12, 2026';
+export const CURRENT_APP_VERSION = '1.4.1';
+export const CURRENT_APP_BUILD_DATE = 'October 7, 2026';
 export const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Charan610/APY/releases/latest';
 
 export const AppUpdate = registerPlugin('AppUpdate');
@@ -33,7 +33,7 @@ export function compareVersions(v1, v2) {
 
 /**
  * Queries GitHub REST API for the latest published release of APY.
- * Silent and non-blocking with local caching.
+ * Silent and non-blocking with local caching and fast 3.5s timeout.
  */
 export async function checkForAppUpdate(force = false) {
   try {
@@ -51,11 +51,16 @@ export async function checkForAppUpdate(force = false) {
       } catch (e) {}
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
     const response = await fetch(GITHUB_RELEASES_URL, {
+      signal: controller.signal,
       headers: {
         'Accept': 'application/vnd.github.v3+json'
       }
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       if (response.status === 404) {

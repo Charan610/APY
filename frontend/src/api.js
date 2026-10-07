@@ -1,3 +1,5 @@
+import { apiCache } from './utils/apiCache';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export function getApiBase() {
@@ -88,7 +90,7 @@ export function setStoredUser(user) {
   }
 }
 
-async function request(endpoint, options = {}) {
+async function request(endpoint, options = {}, retried = false) {
   const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -97,22 +99,40 @@ async function request(endpoint, options = {}) {
     ...(options.headers || {})
   };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || 6000; // 6s timeout
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const err = new Error(data.detail || data.message || `Request failed with status ${response.status}`);
-    err.status = response.status;
-    err.detail = data.detail;
-    if (response.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('apy_auth_expired', { detail: { message: data.detail } }));
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const err = new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+      err.status = response.status;
+      err.detail = data.detail;
+      if (response.status === 401 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('apy_auth_expired', { detail: { message: data.detail } }));
+      }
+      throw err;
+    }
+    return data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s. Please check your network.`);
+    }
+    if (!retried && (options.method === 'GET' || !options.method) && (err.name === 'TypeError' || err.message?.toLowerCase().includes('fetch'))) {
+      await new Promise(r => setTimeout(r, 400));
+      return request(endpoint, options, true);
     }
     throw err;
   }
-  return data;
 }
 
 export const api = {
@@ -127,27 +147,79 @@ export const api = {
     }
     removeAuthToken();
     removeStoredUser();
+    apiCache.invalidate();
   },
   getMe: () => request('/auth/me'),
   getMyData: () => request('/auth/my-data'),
   deleteMyAccount: () => request('/auth/account', { method: 'DELETE' }),
-  updateBaseline: (payload) => request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) }),
-  updateSection: (sectionId) => request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) }),
+  updateBaseline: (payload) => {
+    apiCache.invalidate();
+    return request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) });
+  },
+  updateSection: (sectionId) => {
+    apiCache.invalidate();
+    return request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) });
+  },
   changePin: (payload) => request('/auth/change-pin', { method: 'PUT', body: JSON.stringify(payload) }),
 
   // Sections
   getSections: () => request('/sections'),
-  getSectionTimetable: (sectionId) => request(`/sections/${sectionId}/timetable`),
-  createSection: (payload) => request('/sections/create', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTimetable: (sectionId, payload) => request(`/sections/${sectionId}/timetable`, { method: 'PUT', body: JSON.stringify(payload) }),
+  getSectionTimetable: async (sectionId, forceRefresh = false) => {
+    const cacheKey = `timetable_${sectionId}`;
+    if (!forceRefresh) {
+      const cached = apiCache.get(cacheKey);
+      if (cached && !cached.isStale) return cached.data;
+    }
+    const data = await request(`/sections/${sectionId}/timetable`);
+    if (data) {
+      apiCache.set(cacheKey, data, 60000);
+      try { localStorage.setItem(`apy_tt_cache_${sectionId}`, JSON.stringify(data.timetable_by_day || data)); } catch {}
+    }
+    return data;
+  },
+  createSection: (payload) => {
+    apiCache.invalidate();
+    return request('/sections/create', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  updateTimetable: (sectionId, payload) => {
+    apiCache.invalidate();
+    return request(`/sections/${sectionId}/timetable`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
 
   // Attendance
-  getLogs: (startDate, endDate) => request(`/attendance/logs?start_date=${startDate || ''}&end_date=${endDate || ''}`),
-  markAttendance: (logDate, entries) => request('/attendance/mark', {
-    method: 'POST',
-    body: JSON.stringify({ log_date: logDate, entries })
-  }),
-  getSummary: () => request('/attendance/summary'),
+  getLogs: async (startDate = '', endDate = '', forceRefresh = false) => {
+    const cacheKey = `logs_${startDate}_${endDate}`;
+    if (!forceRefresh) {
+      const cached = apiCache.get(cacheKey);
+      if (cached && !cached.isStale) return cached.data;
+    }
+    const data = await request(`/attendance/logs?start_date=${startDate || ''}&end_date=${endDate || ''}`);
+    if (data) {
+      apiCache.set(cacheKey, data, 20000);
+      try { localStorage.setItem('apy_logs_cache', JSON.stringify(data.logs_by_date || data)); } catch {}
+    }
+    return data;
+  },
+  markAttendance: async (logDate, entries) => {
+    apiCache.invalidate();
+    return request('/attendance/mark', {
+      method: 'POST',
+      body: JSON.stringify({ log_date: logDate, entries })
+    });
+  },
+  getSummary: async (forceRefresh = false) => {
+    const cacheKey = 'summary';
+    if (!forceRefresh) {
+      const cached = apiCache.get(cacheKey);
+      if (cached && !cached.isStale) return cached.data;
+    }
+    const data = await request('/attendance/summary');
+    if (data) {
+      apiCache.set(cacheKey, data, 30000);
+      try { localStorage.setItem('apy_summary_cache', JSON.stringify(data)); } catch {}
+    }
+    return data;
+  },
   getForecast: (targetDate) => request(`/attendance/forecast?target_date=${targetDate}`),
   getTargetCalculation: (targetPct = 75) => request(`/attendance/target-calculator?target_percentage=${targetPct}`),
   exportCsv: async () => {

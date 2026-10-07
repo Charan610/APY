@@ -246,13 +246,21 @@ class TursoConnection:
 def is_turso_configured() -> bool:
     return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and len(TURSO_AUTH_TOKEN) > 20)
 
+_turso_connection: Optional[TursoConnection] = None
+
+def get_turso_connection() -> TursoConnection:
+    global _turso_connection
+    if _turso_connection is None:
+        _turso_connection = TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+    return _turso_connection
+
 _local_schema_initialized = False
 
 def get_db_connection():
     global _local_schema_initialized
     if is_turso_configured():
-        conn = TursoConnection(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
-        if not _local_schema_initialized:
+        conn = get_turso_connection()
+        if not _local_schema_initialized and not os.environ.get("VERCEL"):
             _local_schema_initialized = True
             try:
                 init_db()
@@ -362,6 +370,7 @@ def init_db():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_date ON daily_logs(user_id, log_date);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_block ON daily_logs(user_id, block_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_block ON daily_logs(block_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_logs_user_status ON daily_logs(user_id, status);")
 
             # Notification preferences table (Additive)
             cursor.execute("""

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { api, getStoredUser, setAuthToken, setStoredUser, checkIsAdmin } from './api';
 import { nativeStorage } from './nativeStorage';
 import Header from './components/Header';
@@ -7,9 +7,6 @@ import TodayTab from './components/TodayTab';
 import DashboardTab from './components/DashboardTab';
 import TimetableTab from './components/TimetableTab';
 import ForecastTab from './components/ForecastTab';
-import SettingsModal from './components/SettingsModal';
-import NotificationPromptModal from './components/NotificationPromptModal';
-import AdminModal from './components/AdminModal';
 import OfflineBanner from './components/OfflineBanner';
 import { registerServiceWorker } from './notifications';
 import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
@@ -19,6 +16,10 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { LocalNotifications } from '@capacitor/local-notifications';
+
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const NotificationPromptModal = lazy(() => import('./components/NotificationPromptModal'));
+const AdminModal = lazy(() => import('./components/AdminModal'));
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
@@ -55,7 +56,7 @@ export default function App() {
     } catch {}
     return 'today';
   });
-  const [loading, setLoading] = useState(() => !getStoredUser());
+  const [loading, setLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('profile');
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
@@ -63,11 +64,9 @@ export default function App() {
 
   // 1. Initialize Capacitor native controls & persistent session
   useEffect(() => {
-    // Immediate Splash Screen release for instant startup if cached
+    // Immediate Splash Screen release for instant startup
     try {
-      if (getStoredUser()) {
-        SplashScreen.hide();
-      }
+      SplashScreen.hide();
     } catch (e) {}
 
     // A. Configure native status bar
@@ -166,39 +165,38 @@ export default function App() {
       if (storedUser) {
         setUser(storedUser);
       }
-
-      // 2. Fetch fresh profile & summary in parallel
-      const [userData, summaryData] = await Promise.all([
-        api.getMe().catch(() => null),
-        api.getSummary().catch(() => null)
-      ]);
-
-      if (userData && userData.user) {
-        const u = {
-          ...userData.user,
-          is_admin: checkIsAdmin(userData.user)
-        };
-        setUser(u);
-        setStoredUser(u);
-        if (summaryData) {
-          setSummary(summaryData);
-          try {
-            localStorage.setItem('apy_summary_cache', JSON.stringify(summaryData));
-          } catch {}
-        }
-      } else if (!storedUser) {
-        setUser(null);
-        setAuthToken(null);
-        setStoredUser(null);
-        try { localStorage.removeItem('apy_summary_cache'); } catch {}
-      }
     } catch (err) {
-      // Keep existing stored user on transient network errors
+      // Keep existing stored user on transient read errors
     } finally {
+      // Immediate release: never block UI on remote requests
       setLoading(false);
       try {
         await SplashScreen.hide();
       } catch (e) {}
+    }
+
+    // 2. Fetch fresh profile & summary asynchronously in background
+    const token = getAuthToken();
+    if (token) {
+      Promise.all([
+        api.getMe().catch(() => null),
+        api.getSummary().catch(() => null)
+      ]).then(([userData, summaryData]) => {
+        if (userData && userData.user) {
+          const u = {
+            ...userData.user,
+            is_admin: checkIsAdmin(userData.user)
+          };
+          setUser(u);
+          setStoredUser(u);
+          if (summaryData) {
+            setSummary(summaryData);
+            try {
+              localStorage.setItem('apy_summary_cache', JSON.stringify(summaryData));
+            } catch {}
+          }
+        }
+      }).catch(() => {});
     }
   };
 
@@ -453,42 +451,46 @@ export default function App() {
             )}
           </nav>
 
-          {/* Post-Login One-Time Reminder Prompt */}
-          <NotificationPromptModal
-            isOpen={showNotifPrompt}
-            onClose={() => setShowNotifPrompt(false)}
-            onConfigUpdated={() => {
-              setShowNotifPrompt(false);
-            }}
-          />
+          {/* Lazy-Loaded Dialogs and Modals */}
+          <Suspense fallback={null}>
+            {showNotifPrompt && (
+              <NotificationPromptModal
+                isOpen={showNotifPrompt}
+                onClose={() => setShowNotifPrompt(false)}
+                onConfigUpdated={() => {
+                  setShowNotifPrompt(false);
+                }}
+              />
+            )}
 
-          {/* Settings Modal */}
-          <SettingsModal
-            isOpen={showSettings}
-            initialTab={settingsTab}
-            onClose={() => setShowSettings(false)}
-            user={user}
-            onOpenAdmin={() => {
-              triggerHaptic();
-              setShowAdminModal(true);
-            }}
-            onUserUpdated={(updatedUser) => {
-              if (updatedUser) {
-                setUser(updatedUser);
-                setStoredUser(updatedUser);
-              }
-              initNativeSession();
-            }}
-          />
+            {showSettings && (
+              <SettingsModal
+                isOpen={showSettings}
+                initialTab={settingsTab}
+                onClose={() => setShowSettings(false)}
+                user={user}
+                onOpenAdmin={() => {
+                  triggerHaptic();
+                  setShowAdminModal(true);
+                }}
+                onUserUpdated={(updatedUser) => {
+                  if (updatedUser) {
+                    setUser(updatedUser);
+                    setStoredUser(updatedUser);
+                  }
+                  initNativeSession();
+                }}
+              />
+            )}
 
-          {/* Admin Modal (Restricted to Authorized Admins) */}
-          {isAdmin && (
-            <AdminModal
-              isOpen={showAdminModal}
-              onClose={() => setShowAdminModal(false)}
-              currentUser={user}
-            />
-          )}
+            {isAdmin && showAdminModal && (
+              <AdminModal
+                isOpen={showAdminModal}
+                onClose={() => setShowAdminModal(false)}
+                currentUser={user}
+              />
+            )}
+          </Suspense>
         </>
       )}
     </div>

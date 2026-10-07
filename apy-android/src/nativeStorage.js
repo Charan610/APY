@@ -4,10 +4,17 @@ const TOKEN_KEY = 'attendance_jwt_token';
 const USER_KEY = 'attendance_user';
 const API_URL_KEY = 'attendance_api_url';
 
+function withTimeout(promise, ms = 250) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
 export const nativeStorage = {
   async getToken() {
     try {
-      const { value } = await Preferences.get({ key: TOKEN_KEY });
+      const { value } = await withTimeout(Preferences.get({ key: TOKEN_KEY }), 250);
       if (value) return value;
     } catch (e) {}
     return localStorage.getItem(TOKEN_KEY);
@@ -29,7 +36,7 @@ export const nativeStorage = {
 
   async getUser() {
     try {
-      const { value } = await Preferences.get({ key: USER_KEY });
+      const { value } = await withTimeout(Preferences.get({ key: USER_KEY }), 250);
       if (value) return JSON.parse(value);
     } catch (e) {}
     const local = localStorage.getItem(USER_KEY);

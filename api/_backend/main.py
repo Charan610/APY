@@ -23,11 +23,12 @@ if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME
     except Exception as e:
         print("Scheduler init note:", e)
 
-# Run non-destructive schema migrations on startup (ensures additive tables like revoked_tokens exist on Turso)
-try:
-    init_db()
-except Exception as e:
-    print("Database init notice:", e)
+# Run non-destructive schema migrations on startup for local / dedicated servers
+if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    try:
+        init_db()
+    except Exception as e:
+        print("Database init notice:", e)
 
 # Seeding is for local dev only
 if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
@@ -76,6 +77,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse, JSONResponse

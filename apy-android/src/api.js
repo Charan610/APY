@@ -1,5 +1,6 @@
 import { nativeStorage } from './nativeStorage';
 import { Capacitor } from '@capacitor/core';
+import { apiCache } from './utils/apiCache';
 
 let cachedApiUrl = localStorage.getItem('attendance_api_url') || import.meta.env.VITE_API_URL || 'https://apy-i1s1.vercel.app/api';
 
@@ -126,11 +127,17 @@ async function request(endpoint, options = {}, retried = false) {
     ...(options.headers || {})
   };
 
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || 6000; // 6s strict timeout prevents 300s socket hang
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const response = await fetch(`${baseUrl}${endpoint}`, {
       ...options,
-      headers
+      headers,
+      signal: options.signal || controller.signal
     });
+    clearTimeout(timeoutId);
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -144,12 +151,16 @@ async function request(endpoint, options = {}, retried = false) {
     }
     return data;
   } catch (err) {
-    // Retry once for transient network drops on mobile
-    if (!retried && (options.method === 'GET' || !options.method || options.method === 'POST') && (err.name === 'TypeError' || err.message?.toLowerCase().includes('fetch'))) {
-      await new Promise(r => setTimeout(r, 600));
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s. Please check your network.`);
+    }
+    // Retry once for transient network drops on mobile ONLY for GET requests, not mutations
+    if (!retried && (options.method === 'GET' || !options.method) && (err.name === 'TypeError' || err.message?.toLowerCase().includes('fetch'))) {
+      await new Promise(r => setTimeout(r, 400));
       return request(endpoint, options, true);
     }
-    if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+    if (err.name === 'TypeError' && err.message?.toLowerCase().includes('fetch')) {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         throw new Error(`Device is currently offline. Please check your mobile data or Wi-Fi connection.`);
       }
@@ -171,27 +182,79 @@ export const api = {
     }
     removeAuthToken();
     removeStoredUser();
+    apiCache.invalidate();
   },
   getMe: () => request('/auth/me'),
   getMyData: () => request('/auth/my-data'),
   deleteMyAccount: () => request('/auth/account', { method: 'DELETE' }),
-  updateBaseline: (payload) => request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) }),
-  updateSection: (sectionId) => request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) }),
+  updateBaseline: (payload) => {
+    apiCache.invalidate();
+    return request('/auth/baseline', { method: 'PUT', body: JSON.stringify(payload) });
+  },
+  updateSection: (sectionId) => {
+    apiCache.invalidate();
+    return request('/auth/section', { method: 'PUT', body: JSON.stringify({ section_id: sectionId }) });
+  },
   changePin: (payload) => request('/auth/change-pin', { method: 'PUT', body: JSON.stringify(payload) }),
 
   // Sections
   getSections: () => request('/sections'),
-  getSectionTimetable: (sectionId) => request(`/sections/${sectionId}/timetable`),
-  createSection: (payload) => request('/sections/create', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTimetable: (sectionId, payload) => request(`/sections/${sectionId}/timetable`, { method: 'PUT', body: JSON.stringify(payload) }),
+  getSectionTimetable: async (sectionId, forceRefresh = false) => {
+    const cacheKey = `timetable_${sectionId}`;
+    if (!forceRefresh) {
+      const cached = apiCache.get(cacheKey);
+      if (cached && !cached.isStale) return cached.data;
+    }
+    const data = await request(`/sections/${sectionId}/timetable`);
+    if (data) {
+      apiCache.set(cacheKey, data, 60000);
+      try { localStorage.setItem(`apy_tt_cache_${sectionId}`, JSON.stringify(data.timetable_by_day || data)); } catch {}
+    }
+    return data;
+  },
+  createSection: (payload) => {
+    apiCache.invalidate();
+    return request('/sections/create', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  updateTimetable: (sectionId, payload) => {
+    apiCache.invalidate();
+    return request(`/sections/${sectionId}/timetable`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
 
   // Attendance
-  getLogs: (startDate, endDate) => request(`/attendance/logs?start_date=${startDate || ''}&end_date=${endDate || ''}`),
-  markAttendance: (logDate, entries) => request('/attendance/mark', {
-    method: 'POST',
-    body: JSON.stringify({ log_date: logDate, entries })
-  }),
-  getSummary: () => request('/attendance/summary'),
+  getLogs: async (startDate = '', endDate = '', forceRefresh = false) => {
+    const cacheKey = `logs_${startDate}_${endDate}`;
+    if (!forceRefresh) {
+      const cached = apiCache.get(cacheKey);
+      if (cached && !cached.isStale) return cached.data;
+    }
+    const data = await request(`/attendance/logs?start_date=${startDate || ''}&end_date=${endDate || ''}`);
+    if (data) {
+      apiCache.set(cacheKey, data, 20000);
+      try { localStorage.setItem('apy_logs_cache', JSON.stringify(data.logs_by_date || data)); } catch {}
+    }
+    return data;
+  },
+  markAttendance: async (logDate, entries) => {
+    apiCache.invalidate();
+    return request('/attendance/mark', {
+      method: 'POST',
+      body: JSON.stringify({ log_date: logDate, entries })
+    });
+  },
+  getSummary: async (forceRefresh = false) => {
+    const cacheKey = 'summary';
+    if (!forceRefresh) {
+      const cached = apiCache.get(cacheKey);
+      if (cached && !cached.isStale) return cached.data;
+    }
+    const data = await request('/attendance/summary');
+    if (data) {
+      apiCache.set(cacheKey, data, 30000);
+      try { localStorage.setItem('apy_summary_cache', JSON.stringify(data)); } catch {}
+    }
+    return data;
+  },
   getForecast: (targetDate) => request(`/attendance/forecast?target_date=${targetDate}`),
   getTargetCalculation: (targetPct = 75) => request(`/attendance/target-calculator?target_percentage=${targetPct}`),
   exportCsv: async () => {

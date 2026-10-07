@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { 
   ShieldAlert, 
   CheckCircle2, 
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
-export default function DashboardTab({ summary, user }) {
+function DashboardTabComponent({ summary, user }) {
   const [exporting, setExporting] = useState(false);
   const [sortBy, setSortBy] = useState('default'); // 'default', 'lowest', 'highest'
 
@@ -37,15 +37,18 @@ export default function DashboardTab({ summary, user }) {
     return { label: 'Detention Alert (<70%)', icon: ShieldAlert, color: 'var(--bad)', badgeClass: 'bad' };
   };
 
-  const tier = getTier(overall.percentage);
+  const tier = useMemo(() => getTier(overall.percentage), [overall.percentage]);
   const TierIcon = tier.icon;
 
-  let subjects = Object.values(summary?.subjects || {});
-  if (sortBy === 'lowest') {
-    subjects = [...subjects].sort((a, b) => a.percentage - b.percentage);
-  } else if (sortBy === 'highest') {
-    subjects = [...subjects].sort((a, b) => b.percentage - a.percentage);
-  }
+  const subjects = useMemo(() => {
+    let list = Object.values(summary?.subjects || {});
+    if (sortBy === 'lowest') {
+      return [...list].sort((a, b) => a.percentage - b.percentage);
+    } else if (sortBy === 'highest') {
+      return [...list].sort((a, b) => b.percentage - a.percentage);
+    }
+    return list;
+  }, [summary?.subjects, sortBy]);
 
   const handleExportCsv = async () => {
     try {
@@ -207,3 +210,5 @@ export default function DashboardTab({ summary, user }) {
     </div>
   );
 }
+
+export default memo(DashboardTabComponent);
