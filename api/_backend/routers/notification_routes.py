@@ -230,7 +230,7 @@ class DeviceSyncRequest(BaseModel):
 def get_latest_apk_info():
     """Returns the latest APK release info and broadcast status."""
     latest = get_latest_apk_broadcast()
-    default_version = "1.4.0"
+    default_version = "1.4.1"
     default_url = f"https://github.com/Charan610/APY/releases/download/v{default_version}/APY.apk"
     return {
         "version": latest["version"] if latest else default_version,

@@ -44,7 +44,7 @@ def fetch_latest_github_release():
 
 def main():
     parser = argparse.ArgumentParser(description="Broadcast APK update push notification to all users.")
-    parser.add_argument("--version", "-v", type=str, default=None, help="Target APK version (e.g., 1.4.0)")
+    parser.add_argument("--version", "-v", type=str, default=None, help="Target APK version (e.g., 1.4.1)")
     parser.add_argument("--url", "-u", type=str, default=None, help="Direct APK download URL")
     parser.add_argument("--notes", "-n", type=str, default=None, help="Release notes / announcement text")
     parser.add_argument("--sender", "-s", type=str, default="CLI Admin", help="Sender register or admin handle")
@@ -66,7 +66,7 @@ def main():
         if gh_notes and not target_notes:
             target_notes = gh_notes
 
-    target_version = (target_version or "1.4.0").lstrip("v").strip()
+    target_version = (target_version or "1.4.1").lstrip("v").strip()
     target_url = target_url or f"https://github.com/Charan610/APY/releases/download/v{target_version}/APY.apk"
     target_notes = target_notes or f"APY v{target_version} update is now live. Tap to update your app!"
 

@@ -397,7 +397,7 @@ def get_platform_stats(admin_user: dict = Depends(get_current_admin_user)):
         }
 
 class BroadcastUpdateRequest(BaseModel):
-    version: Optional[str] = "1.4.0"
+    version: Optional[str] = "1.4.1"
     apk_url: Optional[str] = None
     release_notes: Optional[str] = None
 
@@ -410,7 +410,7 @@ def broadcast_apk_update(
     admin_reg = admin_user.get("register_number", "ADMIN")
     client_ip = get_client_ip(request)
     
-    version = (req.version or "1.4.0").lstrip("v").strip()
+    version = (req.version or "1.4.1").lstrip("v").strip()
     apk_url = req.apk_url or f"https://github.com/Charan610/APY/releases/download/v{version}/APY.apk"
     notes = req.release_notes or f"APY v{version} is now released with new features and enhancements."
     

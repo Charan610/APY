@@ -326,7 +326,7 @@ export default function App() {
                 <span style={{ fontSize: '20px' }}>🚀</span>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.2 }}>
-                    New APK Update (v{updateInfo.latestVersion || '1.4.0'})
+                    New APK Update (v{updateInfo.latestVersion || '1.4.1'})
                   </div>
                   <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     Tap to update and install latest enhancements
