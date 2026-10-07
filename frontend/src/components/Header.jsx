@@ -1,26 +1,68 @@
-import React from 'react';
-import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell, ShieldCheck, GraduationCap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, LogOut, CalendarCheck, LayoutDashboard, Calendar, Sparkles, Bell, ShieldCheck } from 'lucide-react';
 import { checkIsAdmin } from '../api';
+import BrandLogo from './BrandLogo';
 
-export default function Header({ user, activeTab, onSelectTab, onOpenSettings, onOpenReminders, onOpenAdmin, onLogout, hasUpdate = false }) {
+export default function Header({ 
+  user, 
+  activeTab, 
+  onSelectTab, 
+  onOpenSettings, 
+  onOpenReminders, 
+  onOpenAdmin, 
+  onLogout, 
+  hasUpdate = false, 
+  brandLogoRef,
+  introStage = 'complete'
+}) {
   const isAdmin = checkIsAdmin(user);
+  const isEarlyIntro = introStage === 'logo-center';
+  const hideDuringIntro = isEarlyIntro;
 
   return (
     <header className="ledger-header">
-      <div className="brand-section">
-        <div className="brand-crest" title="ATT PER Y">
-          <GraduationCap size={22} className="brand-icon-glyph" />
+      {/* Brand Section: Logo + App Name */}
+      <div 
+        className="brand-section"
+        onClick={() => onSelectTab && onSelectTab('today')}
+        role="button"
+        tabIndex={0}
+      >
+        <div 
+          className="brand-crest" 
+          ref={brandLogoRef} 
+          title="ATT PER Y — Academic Ledger"
+          style={{
+            opacity: isEarlyIntro ? 0 : 1,
+            transition: 'opacity 0.35s ease'
+          }}
+        >
+          <BrandLogo size={40} />
         </div>
-        <div>
-          <div className="brand-heading font-serif">ATT PER Y</div>
+        <div 
+          className="brand-title-wrap"
+          style={{
+            opacity: isEarlyIntro ? 0 : 1,
+            transition: 'opacity 0.35s ease'
+          }}
+        >
+          <div className="brand-heading font-serif">
+            <span className="brand-title-gold">ATT</span> <span className="brand-title-green">PER Y</span>
+          </div>
           <div className="brand-subline">
-            {user ? `${user.branch || 'CSE'} — Sec ${user.section_label || 'C'} · ${user.register_number}` : 'CSE Department'}
+            {user ? `${user.branch || 'CSE'} • Sec ${user.section_label || 'C'} • ${user.register_number}` : 'Academic Ledger'}
           </div>
         </div>
       </div>
 
-      {/* Desktop Navigation Links (Visible on PC / Tablet) */}
-      <div className="desktop-nav-links">
+      {/* Desktop Navigation Links */}
+      <div 
+        className="desktop-nav-links"
+        style={{ 
+          opacity: hideDuringIntro ? 0 : 1, 
+          transition: 'opacity 0.45s ease 0.35s' 
+        }}
+      >
         <button
           type="button"
           className={`desktop-tab-btn ${activeTab === 'today' ? 'active' : ''}`}
@@ -63,10 +105,9 @@ export default function Header({ user, activeTab, onSelectTab, onOpenSettings, o
             className="desktop-tab-btn"
             onClick={onOpenAdmin}
             style={{
-              color: 'var(--accent-gold, #d97706)',
-              fontWeight: 700,
-              background: 'var(--accent-gold-bg, rgba(217, 119, 6, 0.08))',
-              border: '1px solid var(--accent-gold, #d97706)'
+              color: 'var(--accent-gold-dark)',
+              borderColor: 'var(--accent-gold-border)',
+              background: 'var(--accent-gold-soft)'
             }}
           >
             <ShieldCheck size={16} />
@@ -75,63 +116,76 @@ export default function Header({ user, activeTab, onSelectTab, onOpenSettings, o
         )}
       </div>
 
-      <div className="header-actions">
+      {/* Header Actions */}
+      <div 
+        className="header-actions"
+        style={{ 
+          opacity: hideDuringIntro ? 0 : 1, 
+          transition: 'opacity 0.45s ease 0.35s' 
+        }}
+      >
         {isAdmin && (
           <button
             type="button"
-            className="btn-icon"
+            className="btn-header-action"
             onClick={onOpenAdmin}
-            title="Admin PIN Reset Panel"
+            title="Administrator Portal"
             style={{
-              color: 'var(--accent-gold, #d97706)',
-              background: 'var(--accent-gold-bg, rgba(217, 119, 6, 0.15))',
-              borderColor: 'var(--accent-gold, #d97706)',
-              borderWidth: '1.5px'
+              color: 'var(--accent-gold-dark)',
+              background: 'var(--accent-gold-soft)',
+              borderColor: 'var(--accent-gold-border)'
             }}
           >
             <ShieldCheck size={19} />
           </button>
         )}
+        
         <button
           type="button"
-          className="btn-icon"
+          className="btn-header-action"
           onClick={onOpenReminders}
           title="Daily Attendance Reminders"
-          style={{ position: 'relative' }}
         >
           <Bell size={18} />
           <span style={{
             position: 'absolute',
-            top: '4px',
-            right: '4px',
+            top: '6px',
+            right: '6px',
             width: '7px',
             height: '7px',
             borderRadius: '50%',
-            background: 'var(--accent-gold)'
+            background: 'var(--accent-gold)',
+            boxShadow: '0 0 4px var(--accent-gold)'
           }} />
         </button>
+
         <button
           type="button"
-          className="btn-icon"
+          className="btn-header-action"
           onClick={onOpenSettings}
           title="Settings & Baseline"
-          style={{ position: 'relative' }}
         >
           <Settings size={18} />
           {hasUpdate && (
             <span style={{
               position: 'absolute',
-              top: '4px',
-              right: '4px',
-              width: '7px',
-              height: '7px',
+              top: '6px',
+              right: '6px',
+              width: '8px',
+              height: '8px',
               borderRadius: '50%',
-              background: '#ea580c',
-              boxShadow: '0 0 4px #ea580c'
+              background: 'var(--bad)',
+              boxShadow: '0 0 4px var(--bad)'
             }} />
           )}
         </button>
-        <button type="button" className="btn-icon" onClick={onLogout} title="Logout">
+
+        <button
+          type="button"
+          className="btn-header-action"
+          onClick={onLogout}
+          title="Logout"
+        >
           <LogOut size={18} />
         </button>
       </div>

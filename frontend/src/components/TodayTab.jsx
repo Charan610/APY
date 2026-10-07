@@ -12,11 +12,68 @@ import {
   Flame, 
   RotateCcw, 
   FileText,
-  TrendingUp,
-  TrendingDown
+  Database,
+  Cpu,
+  Code,
+  BookOpen,
+  Calendar,
+  Layers,
+  ChevronRight as ChevronIcon
 } from 'lucide-react';
 
-export default function TodayTab({ user, summary, onAttendanceUpdated }) {
+function TodayAttendanceWidget({ overallPct, attendedCount, absentCount, introStage, targetRef }) {
+  const compactRadius = 19;
+  const compactCircumference = 2 * Math.PI * compactRadius;
+  const strokeDashoffset = compactCircumference - (compactCircumference * Math.min(100, Math.max(0, overallPct))) / 100;
+  
+  // Hand-off: during intro before dock, keep opacity 0 so traveling card docks directly onto it
+  const isEarly = introStage === 'logo-center' || introStage === 'glide-to-header' || introStage === 'attendance-large';
+
+  return (
+    <div
+      ref={targetRef}
+      className={`today-attendance-widget ${overallPct < 75 ? 'bad' : 'good'}`}
+      style={{
+        opacity: isEarly ? 0 : 1,
+        transition: 'opacity 0.4s ease'
+      }}
+      title={`Overall Attendance: ${overallPct.toFixed(1)}%`}
+    >
+      <div className="widget-main-row">
+        <div className="gauge-ring-wrap">
+          <svg className="gauge-ring-svg" width="48" height="48" viewBox="0 0 48 48">
+            <circle className="gauge-track" cx="24" cy="24" r={compactRadius} strokeWidth="3.5" />
+            <circle
+              className="gauge-fill"
+              cx="24"
+              cy="24"
+              r={compactRadius}
+              strokeWidth="3.5"
+              strokeDasharray={compactCircumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              transform="rotate(-90 24 24)"
+            />
+          </svg>
+          <div className="gauge-pct-center">
+            <span className="gauge-pct-num">
+              {overallPct.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+
+        <div className="gauge-info">
+          <span className="gauge-label">Attendance</span>
+          <span className="gauge-counts">
+            <strong className="text-good">{attendedCount}P</strong> • <strong className="text-bad">{absentCount}A</strong>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function TodayTab({ user, summary, onAttendanceUpdated, introStage = 'complete', attendanceTargetRef }) {
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [timetableByDay, setTimetableByDay] = useState(() => {
     try {
@@ -34,15 +91,15 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
       return {};
     }
   });
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [undoAction, setUndoAction] = useState(null); // { date, previousEntries }
+  const [undoAction, setUndoAction] = useState(null);
   const [dayRemarks, setDayRemarks] = useState('');
   const [showRemarkInput, setShowRemarkInput] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayObj = new Date();
+  
   const minDateObj = new Date();
   minDateObj.setDate(todayObj.getDate() - 7);
   const minDateStr = minDateObj.toISOString().split('T')[0];
@@ -54,6 +111,11 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
   const isCoveredByBaseline = Boolean(user?.baseline_date && currentDate <= user.baseline_date);
   const isDateEditable = currentDate >= minDateStr && currentDate <= maxDateStr && !isCoveredByBaseline;
 
+  const overall = summary?.overall || { percentage: 0, attended: 0, total: 0 };
+  const overallPct = overall.percentage || 0;
+  const attendedCount = overall.attended || 0;
+  const absentCount = Math.max(0, (overall.total || 0) - attendedCount);
+
   useEffect(() => {
     if (user?.section_id) {
       loadInitialData();
@@ -61,7 +123,6 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
   }, [user?.section_id]);
 
   useEffect(() => {
-    // Sync current day remarks from dailyLogs
     const entries = dailyLogs[currentDate] || [];
     const existingNote = entries.find(e => e.notes)?.notes || '';
     setDayRemarks(existingNote);
@@ -83,19 +144,7 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
         try { localStorage.setItem('apy_logs_cache', JSON.stringify(logsData.logs_by_date)); } catch {}
       }
     } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const loadLogs = async () => {
-    try {
-      const data = await api.getLogs();
-      if (data?.logs_by_date) {
-        setDailyLogs(data.logs_by_date);
-        try { localStorage.setItem('apy_logs_cache', JSON.stringify(data.logs_by_date)); } catch {}
-      }
-    } catch (err) {
-      console.error(err);
+      console.error('Initial data load error:', err);
     }
   };
 
@@ -133,13 +182,23 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
     };
   };
 
+  // Helper icon for subject
+  const getSubjectIcon = (subjectName = '') => {
+    const s = subjectName.toUpperCase();
+    if (s.includes('DBMS') || s.includes('DATABASE') || s.includes('SQL')) return Database;
+    if (s.includes('DLCO') || s.includes('COA') || s.includes('CHIP') || s.includes('HARDWARE')) return Cpu;
+    if (s.includes('LAB') || s.includes('JAVA') || s.includes('PYTHON') || s.includes('CPP') || s.includes('DSA')) return Code;
+    if (s.includes('FLAT') || s.includes('MATH') || s.includes('STAT')) return BookOpen;
+    return Layers;
+  };
+
   const getWeekDays = () => {
     const days = [];
     for (let i = -2; i <= 7; i++) {
       const d = new Date();
       d.setDate(todayObj.getDate() + i);
       const iso = d.toISOString().split('T')[0];
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
       const isPastBaseline = Boolean(user?.baseline_date && iso <= user.baseline_date);
       days.push({
         dateStr: iso,
@@ -166,6 +225,15 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
   const currentWeekday = new Date(currentDate).getDay();
   const currentBlocks = timetableByDay[currentWeekday] || [];
   const isSunday = currentWeekday === 0;
+
+  // Periods and subjects count for today
+  const totalPeriodsToday = useMemo(() => {
+    return currentBlocks.reduce((sum, b) => sum + (b.periods || 0), 0);
+  }, [currentBlocks]);
+
+  const uniqueSubjectsToday = useMemo(() => {
+    return new Set(currentBlocks.map(b => b.subject)).size;
+  }, [currentBlocks]);
 
   const getBlockStatus = (blockId) => {
     const entries = dailyLogs[currentDate] || [];
@@ -226,7 +294,6 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
   };
 
   const queueBackgroundSync = (date, entries) => {
-    // 1. Immediately cache logs to localStorage (0ms persistence)
     try {
       const currentStored = JSON.parse(localStorage.getItem('apy_logs_cache') || '{}');
       currentStored[date] = entries;
@@ -301,7 +368,6 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
       onAttendanceUpdated(optimisticSummary);
     }
 
-    // Background sync: send full updated day entries for total reliability
     queueBackgroundSync(currentDate, currentEntries);
   };
 
@@ -317,12 +383,10 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
       notes: dayRemarks || null 
     }));
 
-    // 0ms Optimistic state update
     setDailyLogs(prev => ({ ...prev, [currentDate]: entries }));
     setFeedback(`Marked All ${status.toUpperCase()}`);
     setTimeout(() => setFeedback(''), 2000);
 
-    // 0ms Optimistic Summary recalculation for all blocks
     const changes = currentBlocks.map(b => {
       const match = prevEntries.find(p => p.block_id === b.id);
       return {
@@ -337,7 +401,6 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
       onAttendanceUpdated(optimisticSummary);
     }
 
-    // Queue non-blocking background sync
     queueBackgroundSync(currentDate, entries);
   };
 
@@ -395,200 +458,303 @@ export default function TodayTab({ user, summary, onAttendanceUpdated }) {
     })));
   };
 
+  const formattedDate = useMemo(() => {
+    const d = new Date(currentDate);
+    return {
+      weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
+      monthDay: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    };
+  }, [currentDate]);
+
   return (
-    <div>
-      {/* Week Navigator Ribbon */}
-      <div className="week-navigator-ribbon">
+    <div style={{ opacity: (introStage === 'logo-center') ? 0 : 1, transition: 'opacity 0.5s ease' }}>
+      {/* 1. Horizontal Week Navigator Ribbon */}
+      <div className="week-navigator-ribbon" role="tablist" aria-label="Select Date">
         {getWeekDays().map((d) => (
-          <div
+          <button
             key={d.dateStr}
+            type="button"
             className={`ribbon-day-cell ${currentDate === d.dateStr ? 'active' : ''}`}
             onClick={() => { setCurrentDate(d.dateStr); setFeedback(''); setUndoAction(null); }}
+            title={d.dateStr}
           >
-            <div className="ribbon-day-label">{d.dayName}</div>
-            <div className="ribbon-day-num">{d.dayNum}</div>
-            <div className={`ribbon-status-dot ${d.isSunday ? 'holiday' : d.isPastBaseline ? 'baseline' : d.hasLogs ? 'logged' : ''}`} />
-          </div>
+            <span className="ribbon-day-label">{d.dayName}</span>
+            <span className="ribbon-day-num">{d.dayNum}</span>
+            <span className={`ribbon-status-dot ${d.isSunday ? 'holiday' : d.isPastBaseline ? 'baseline' : d.hasLogs ? 'logged' : ''}`} />
+          </button>
         ))}
       </div>
 
-      {/* Main Ledger Register Card */}
-      <div className="ledger-card">
-        <div className="card-header-ruled">
-          <div>
-            <div className="card-header-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>{new Date(currentDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
-              {currentDate === todayStr && <span className="card-header-badge good">Today</span>}
-              {streakDays > 1 && (
-                <span className="card-header-badge good" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }} title="Consecutive days 100% attended">
-                  <Flame size={12} color="#f59e0b" fill="#f59e0b" />
-                  {streakDays}d Streak
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-              Section {user?.section_label} · {feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Included in Baseline Cutoff' : 'Active Schedule Window')}
-            </div>
+      {/* 2. Hero Date & Streak Card Banner */}
+      <div className="today-hero-banner">
+        <div className="today-hero-left">
+          <span className="today-hero-weekday">{formattedDate.weekday}</span>
+          <div className="today-hero-date-row">
+            <span className="today-hero-date">{formattedDate.monthDay}</span>
+            {currentDate === todayStr && <span className="today-hero-badge">TODAY</span>}
           </div>
-
-          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
-            {undoAction && (
-              <button 
-                type="button" 
-                className="btn btn-secondary btn-sm" 
-                onClick={handleUndo} 
-                style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                title="Undo last change"
-              >
-                <RotateCcw size={12} />
-                <span>Undo</span>
-              </button>
-            )}
-            <button type="button" className="btn-icon" onClick={() => shiftDate(-1)} title="Previous Day">
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => shiftDate(1)}
-              disabled={currentDate >= maxDateStr}
-              title="Next Day"
-            >
-              <ChevronRight size={16} />
-            </button>
+          <div className="today-hero-subline">
+            <span>Section {user?.section_label || 'C'}</span>
+            <span>•</span>
+            <span>{feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Baseline Cutoff' : 'Active Schedule Window')}</span>
           </div>
         </div>
 
-        {/* Baseline / Edit window check */}
-        {isCoveredByBaseline ? (
-          <div className="alert-callout error" style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', color: 'var(--ink)' }}>
-            <Lock size={16} color="var(--accent-gold)" />
-            <span>
-              <strong>Included in Historical Baseline:</strong> Periods up to & including <strong>{user.baseline_date}</strong> are already counted in your baseline figures ({user.baseline_attended}/{user.baseline_total}). Daily logging starts after this date.
-            </span>
-          </div>
-        ) : !isDateEditable ? (
-          <div className="alert-callout error">
-            <Lock size={16} />
-            <span>This date is outside the active 7-day window. Editing is locked.</span>
-          </div>
-        ) : null}
+        {/* Right side: Permanent Attendance Widget + Streak Card */}
+        <div className="today-hero-right">
+          <TodayAttendanceWidget
+            overallPct={overallPct}
+            attendedCount={attendedCount}
+            absentCount={absentCount}
+            introStage={introStage}
+            targetRef={attendanceTargetRef}
+          />
 
-        {/* Action helper buttons & Day Remarks */}
-        {isDateEditable && !isSunday && currentBlocks.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {/* Streak Hero Card */}
+          <div className="today-streak-card" title="Attendance streak of consecutive 100% days">
+            <div className="streak-flame-badge">
+              <Flame size={18} fill="var(--accent-gold)" />
+            </div>
             <div>
-              {!showRemarkInput && !dayRemarks ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setShowRemarkInput(true)}
-                  style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                >
-                  <FileText size={12} /> + Remarks (OD / Medical / Fest)
-                </button>
-              ) : null}
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('present')}>
-                <CheckCheck size={14} color="var(--good)" /> All Present
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('absent')}>
-                <UserX size={14} color="var(--bad)" /> All Absent
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleMarkAll('holiday')}>
-                <Coffee size={14} color="var(--accent-gold)" /> Day Holiday
-              </button>
+              <div className="streak-number">{streakDays > 0 ? `${streakDays}D` : '0D'}</div>
+              <div className="streak-label">Streak</div>
             </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* Optional Day Remarks Input Box */}
-        {showRemarkInput && isDateEditable && !isSunday && (
-          <div style={{ background: 'var(--surface-alt)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', marginBottom: '0.85rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <FileText size={14} color="var(--accent-gold)" />
-            <input
-              type="text"
-              className="input-text"
-              placeholder="e.g., On-Duty (OD) for NSS / Technical Fest / Medical Slip"
-              value={dayRemarks}
-              onChange={(e) => setDayRemarks(e.target.value)}
-              onBlur={handleSaveRemarks}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRemarks(); }}
-              style={{ fontSize: '0.75rem', flex: 1, padding: '0.25rem 0.5rem' }}
-            />
+      {/* Baseline / Lock Alerts */}
+      {isCoveredByBaseline ? (
+        <div className="alert-callout error" style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', color: 'var(--ink)' }}>
+          <Lock size={16} color="var(--accent-gold)" />
+          <span>
+            <strong>Included in Historical Baseline:</strong> Periods up to & including <strong>{user.baseline_date}</strong> are counted in baseline figures. Daily logging starts after this cutoff.
+          </span>
+        </div>
+      ) : !isDateEditable ? (
+        <div className="alert-callout error">
+          <Lock size={16} />
+          <span>This date is outside the active 7-day schedule window. Editing is locked.</span>
+        </div>
+      ) : null}
+
+      {/* 3. Quick Action Cards (4 Cards Grid matching reference) */}
+      {isDateEditable && !isSunday && currentBlocks.length > 0 && (
+        <div className="quick-actions-grid">
+          {/* Card 1: Remarks */}
+          <div 
+            className="quick-action-card"
+            onClick={() => setShowRemarkInput(prev => !prev)}
+            title="Add On-Duty / Medical / Fest notes"
+          >
+            <div className="quick-action-top">
+              <div className="quick-action-icon-circle" style={{ background: 'var(--surface-alt)', color: 'var(--ink)' }}>
+                <FileText size={15} />
+              </div>
+              <ChevronIcon size={14} color="var(--ink-soft)" />
+            </div>
+            <div>
+              <div className="quick-action-title">Remarks</div>
+              <div className="quick-action-sub">{dayRemarks ? 'Note Active' : 'OD / Medical / Fest'}</div>
+            </div>
           </div>
-        )}
 
-        {/* Periods List */}
-        {isSunday ? (
-          <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--surface-alt)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>☕</div>
-            <h4 className="heading-ledger" style={{ color: 'var(--accent-gold)', fontSize: '1.05rem' }}>Sunday — College Holiday</h4>
-            <p style={{ fontSize: '0.775rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
-              Sundays are fixed holidays and do not count in attendance totals.
-            </p>
+          {/* Card 2: All Present */}
+          <div 
+            className="quick-action-card all-present"
+            onClick={() => handleMarkAll('present')}
+            title="Mark all periods present"
+          >
+            <div className="quick-action-top">
+              <div className="quick-action-icon-circle" style={{ background: 'var(--good-soft)', color: 'var(--good)' }}>
+                <CheckCheck size={15} />
+              </div>
+              <ChevronIcon size={14} color="var(--ink-soft)" />
+            </div>
+            <div>
+              <div className="quick-action-title">All Present</div>
+              <div className="quick-action-sub">Mark all subjects</div>
+            </div>
           </div>
-        ) : currentBlocks.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--surface-alt)', borderRadius: 'var(--radius-md)', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
-            No scheduled periods for {new Date(currentDate).toLocaleDateString('en-US', { weekday: 'long' })}.
+
+          {/* Card 3: All Absent */}
+          <div 
+            className="quick-action-card all-absent"
+            onClick={() => handleMarkAll('absent')}
+            title="Mark all periods absent"
+          >
+            <div className="quick-action-top">
+              <div className="quick-action-icon-circle" style={{ background: 'var(--bad-soft)', color: 'var(--bad)' }}>
+                <UserX size={15} />
+              </div>
+              <ChevronIcon size={14} color="var(--ink-soft)" />
+            </div>
+            <div>
+              <div className="quick-action-title">All Absent</div>
+              <div className="quick-action-sub">Mark all subjects</div>
+            </div>
           </div>
-        ) : (
-          <div>
-            {currentBlocks.map((block) => {
-              const status = getBlockStatus(block.id);
-              const presentImpact = getBlockImpact(block.periods, 'present');
-              const absentImpact = getBlockImpact(block.periods, 'absent');
 
-              return (
-                <div key={block.id} className="period-ledger-block">
-                  <div className="block-title-box">
-                    <span className="block-index-badge">#{block.order_index}</span>
-                    <div>
-                      <div className="block-name">{block.subject}</div>
-                      <div className="block-weight" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span>
-                          {block.periods} {block.periods === 1 ? 'Period' : 'Periods'}
-                          {block.subject.includes('LAB') && <span style={{ color: 'var(--accent-gold)', marginLeft: '4px', fontWeight: 600 }}>[Lab]</span>}
-                        </span>
-
-                        {/* Real-time period impact badges */}
-                        {presentImpact && absentImpact && (
-                          <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: 'var(--ink-soft)' }}>
-                            <span style={{ color: 'var(--good)' }}>Present: {presentImpact.formatted}</span>
-                            {' · '}
-                            <span style={{ color: 'var(--bad)' }}>Absent: {absentImpact.formatted}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="status-pill-group">
-                    <button
-                      type="button"
-                      className={`status-pill-btn ${status === 'present' ? 'active-present' : ''}`}
-                      onClick={() => handleSetBlockStatus(block.id, 'present')}
-                      disabled={!isDateEditable}
-                    >
-                      PRESENT
-                    </button>
-                    <button
-                      type="button"
-                      className={`status-pill-btn ${status === 'absent' ? 'active-absent' : ''}`}
-                      onClick={() => handleSetBlockStatus(block.id, 'absent')}
-                      disabled={!isDateEditable}
-                    >
-                      ABSENT
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Card 4: Day Holiday */}
+          <div 
+            className="quick-action-card holiday"
+            onClick={() => handleMarkAll('holiday')}
+            title="Mark day as holiday"
+          >
+            <div className="quick-action-top">
+              <div className="quick-action-icon-circle" style={{ background: 'var(--accent-gold-soft)', color: 'var(--accent-gold-dark)' }}>
+                <Calendar size={15} />
+              </div>
+              <ChevronIcon size={14} color="var(--ink-soft)" />
+            </div>
+            <div>
+              <div className="quick-action-title">Day Holiday</div>
+              <div className="quick-action-sub">No attendance</div>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Undo Action Pill (if available) */}
+      {undoAction && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleUndo}
+            style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <RotateCcw size={13} />
+            <span>Revert last change</span>
+          </button>
+        </div>
+      )}
+
+      {/* Day Remarks Input Box */}
+      {showRemarkInput && isDateEditable && !isSunday && (
+        <div style={{ background: 'var(--surface-alt)', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', border: '1px solid var(--rule)' }}>
+          <FileText size={16} color="var(--accent-gold)" />
+          <input
+            type="text"
+            className="input-text"
+            placeholder="e.g. On-Duty (OD) for NSS / Technical Symposium / Medical certificate"
+            value={dayRemarks}
+            onChange={(e) => setDayRemarks(e.target.value)}
+            onBlur={handleSaveRemarks}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRemarks(); }}
+            style={{ fontSize: '0.8rem', flex: 1, padding: '0.35rem 0.6rem', background: '#FFFFFF' }}
+            autoFocus
+          />
+        </div>
+      )}
+
+      {/* 4. Section Headline: "Subjects Today" */}
+      <div className="section-headline-row">
+        <h3 className="section-headline">Subjects Today</h3>
+        {!isSunday && currentBlocks.length > 0 && (
+          <span className="section-counter-badge">
+            {uniqueSubjectsToday} Subjects • {totalPeriodsToday} Periods
+          </span>
         )}
       </div>
+
+      {/* 5. Subject Cards List */}
+      {isSunday ? (
+        <div className="ledger-card" style={{ padding: '2.5rem 1.5rem', textAlign: 'center', background: 'var(--surface)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>☕</div>
+          <h4 className="heading-ledger" style={{ color: 'var(--accent-gold-dark)', fontSize: '1.2rem' }}>
+            Sunday — College Holiday
+          </h4>
+          <p style={{ fontSize: '0.825rem', color: 'var(--ink-soft)', marginTop: '0.35rem' }}>
+            Sundays are fixed institutional holidays and are never factored into attendance totals.
+          </p>
+        </div>
+      ) : currentBlocks.length === 0 ? (
+        <div className="ledger-card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
+          No scheduled periods for {formattedDate.weekday}.
+        </div>
+      ) : (
+        <div>
+          {currentBlocks.map((block) => {
+            const status = getBlockStatus(block.id);
+            const presentImpact = getBlockImpact(block.periods, 'present');
+            const absentImpact = getBlockImpact(block.periods, 'absent');
+            const isLab = block.subject.toUpperCase().includes('LAB');
+            const Icon = getSubjectIcon(block.subject);
+
+            // Fetch subject's real calculated percentage from summary
+            const subjectStats = summary?.subjects?.[block.subject];
+            const subjectPct = subjectStats?.percentage !== undefined ? subjectStats.percentage : null;
+
+            return (
+              <div 
+                key={block.id} 
+                className={`subject-item-card ${!isLab ? 'is-theory' : ''} ${status === 'absent' ? 'is-marked-absent' : ''}`}
+              >
+                <div className="subject-card-left">
+                  <div className="subject-icon-box">
+                    <Icon size={20} strokeWidth={2} />
+                  </div>
+
+                  <div className="subject-info">
+                    <div className="subject-name-row">
+                      <span className="subject-title-text">{block.subject}</span>
+                      <span className="subject-type-pill">{isLab ? 'Lab' : 'Theory'}</span>
+                    </div>
+
+                    <div className="subject-periods-text">
+                      #{block.order_index} • {block.periods} {block.periods === 1 ? 'Period' : 'Periods'}
+                    </div>
+
+                    {/* Real attendance progress bar if available */}
+                    {subjectPct !== null && (
+                      <div className="subject-mini-progress">
+                        <div 
+                          className={`subject-mini-fill ${subjectPct < 75 ? 'bad' : ''}`}
+                          style={{ width: `${Math.min(100, Math.max(0, subjectPct))}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Real-time period impact badges */}
+                    {presentImpact && absentImpact && (
+                      <div className="subject-impact-row">
+                        <span className="impact-badge-pos">● Present: {presentImpact.formatted}</span>
+                        <span className="impact-badge-neg">● Absent: {absentImpact.formatted}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Action Buttons: [PRESENT] [ABSENT] */}
+                <div className="subject-actions-group">
+                  <button
+                    type="button"
+                    className={`btn-status-action ${status === 'present' ? 'is-present' : ''}`}
+                    onClick={() => handleSetBlockStatus(block.id, 'present')}
+                    disabled={!isDateEditable}
+                    title="Mark Present"
+                  >
+                    <Check size={14} strokeWidth={3} />
+                    <span>PRESENT</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`btn-status-action ${status === 'absent' ? 'is-absent' : ''}`}
+                    onClick={() => handleSetBlockStatus(block.id, 'absent')}
+                    disabled={!isDateEditable}
+                    title="Mark Absent"
+                  >
+                    <X size={14} strokeWidth={3} />
+                    <span>ABSENT</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

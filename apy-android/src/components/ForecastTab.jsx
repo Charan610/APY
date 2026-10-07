@@ -3,20 +3,19 @@ import { api } from '../api';
 import {
   Sparkles,
   TrendingUp,
-  TrendingDown,
   Calendar,
   AlertCircle,
   RotateCcw,
   CheckCircle2,
   XCircle,
-  Layers,
+  Target,
+  Share2,
+  Check,
   ArrowRight,
   ShieldCheck,
   AlertTriangle,
-  Target,
-  Share2,
-  Copy,
-  Check
+  Clock,
+  Layers
 } from 'lucide-react';
 
 const FORECAST_HORIZON_DAYS = 14;
@@ -83,10 +82,9 @@ export default function ForecastTab({ user }) {
 
       if (sumRes) {
         setSummary(sumRes);
-        // Default to first subject if not already set
         const subjectKeys = Object.keys(sumRes.subjects || {});
         if (!selectedSubject && subjectKeys.length > 0) {
-          setSelectedSubject(subjectKeys[0]);
+          setSelectedSubject('OVERALL');
         }
       }
 
@@ -129,14 +127,13 @@ export default function ForecastTab({ user }) {
       });
     }
     const list = Array.from(set);
-    // Include Overall Aggregate as an option
     return [{ key: 'OVERALL', name: 'Overall Aggregate', isOverall: true }, ...list.map((s) => ({ key: s, name: s, isOverall: false }))];
   }, [summary, timetableByDay]);
 
   // Current attendance statistics for the selected subject
   const currentStats = useMemo(() => {
     if (!summary) return { attended: 0, total: 0, percentage: 0, safe_to_miss: 0, must_attend_next: 0 };
-    if (selectedSubject === 'OVERALL') {
+    if (selectedSubject === 'OVERALL' || !selectedSubject) {
       return {
         attended: summary.overall?.attended || 0,
         total: summary.overall?.total || 0,
@@ -157,35 +154,26 @@ export default function ForecastTab({ user }) {
         is_below_threshold: subjData.is_below_threshold || false
       };
     }
-    return { attended: 0, total: 0, percentage: 0, safe_to_miss: 0, must_attend_next: 0, is_below_threshold: false };
+    return { attended: 0, total: 0, percentage: 0, safe_to_miss: 0, must_attend_next: 0 };
   }, [summary, selectedSubject]);
 
-  // Generate calendar days for forecast horizon (starting today, Sep 4, 2026)
+  // Generate continuous horizon calendar days starting from tomorrow
   const forecastDays = useMemo(() => {
     const days = [];
-    const baseDate = new Date(); // Local date (assumed today: September 4, 2026)
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    for (let i = 0; i < FORECAST_HORIZON_DAYS; i++) {
-      const d = new Date(baseDate);
-      d.setDate(baseDate.getDate() + i);
+    for (let i = 1; i <= FORECAST_HORIZON_DAYS; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const weekday = d.getDay();
+      const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-
-      const weekday = d.getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const formattedDate = `${shortMonthNames[d.getMonth()]} ${d.getDate()}`;
-
-      // Timetable lookup: blocks on this weekday for the student's section
+      let periods = 0;
       const blocks = timetableByDay[weekday] || [];
 
-      // Calculate scheduled periods for the chosen subject
-      let periods = 0;
       if (weekday !== 0 && blocks.length > 0) {
-        if (selectedSubject === 'OVERALL') {
+        if (selectedSubject === 'OVERALL' || !selectedSubject) {
           periods = blocks.reduce((sum, b) => sum + (b.periods || 0), 0);
         } else {
           periods = blocks
@@ -201,7 +189,7 @@ export default function ForecastTab({ user }) {
         dayName: dayNames[weekday],
         shortDay: dayNames[weekday].slice(0, 3),
         formattedDate,
-        isToday: i === 0,
+        isToday: false,
         isSunday: weekday === 0,
         periods,
         weekday
@@ -223,7 +211,6 @@ export default function ForecastTab({ user }) {
 
       const pCount = day.periods;
 
-      // If Sunday or 0 periods scheduled on this day
       if (day.isSunday || pCount === 0) {
         return {
           ...day,
@@ -239,7 +226,6 @@ export default function ForecastTab({ user }) {
         };
       }
 
-      // Generate all meaningful combinations: k = pCount down to 0
       const scenarios = [];
       for (let k = pCount; k >= 0; k--) {
         const projAttended = startingAttended + k;
@@ -249,15 +235,15 @@ export default function ForecastTab({ user }) {
 
         let label = '';
         if (pCount === 1) {
-          label = k === 1 ? 'Attend' : 'Miss';
+          label = k === 1 ? 'Attend (1)' : 'Miss (0)';
         } else if (pCount === 2) {
-          if (k === 2) label = 'Attend both';
-          else if (k === 1) label = 'Attend 1, miss 1';
-          else label = 'Miss both';
+          if (k === 2) label = 'Attend (2)';
+          else if (k === 1) label = 'Attend 1, Miss 1';
+          else label = 'Miss Both (0)';
         } else {
-          if (k === pCount) label = `Attend all (${pCount})`;
-          else if (k === 0) label = `Miss all (${pCount})`;
-          else label = `Attend ${k}, miss ${pCount - k}`;
+          if (k === pCount) label = `Attend All (${pCount})`;
+          else if (k === 0) label = `Miss All (0)`;
+          else label = `Attend ${k}/${pCount}`;
         }
 
         scenarios.push({
@@ -270,14 +256,12 @@ export default function ForecastTab({ user }) {
         });
       }
 
-      // Selected scenario: user override or default to "Attend all" (k = pCount)
       const chosenK = selectedScenarios[day.dateStr] !== undefined
         ? selectedScenarios[day.dateStr]
         : pCount;
 
       const activeScenario = scenarios.find((s) => s.k === chosenK) || scenarios[0];
 
-      // Update running integer totals for next class day
       runningAttended = activeScenario.projectedAttended;
       runningTotal = activeScenario.projectedTotal;
 
@@ -296,7 +280,19 @@ export default function ForecastTab({ user }) {
     });
   }, [currentStats, forecastDays, selectedScenarios]);
 
-  // Scenario selection handler
+  // Overall final outlook metrics
+  const finalProjection = useMemo(() => {
+    if (!multiDayProjections.length) return null;
+    const last = multiDayProjections[multiDayProjections.length - 1];
+    const netDelta = last.resultingPercentage - currentStats.percentage;
+    return {
+      percentage: last.resultingPercentage,
+      attended: last.resultingAttended,
+      total: last.resultingTotal,
+      netDelta
+    };
+  }, [multiDayProjections, currentStats]);
+
   const handleSelectScenario = (dateStr, k) => {
     setSelectedScenarios((prev) => ({
       ...prev,
@@ -304,7 +300,6 @@ export default function ForecastTab({ user }) {
     }));
   };
 
-  // Preset: Simulate attending all upcoming periods
   const handleSimulateAttendAll = () => {
     const nextSelections = {};
     forecastDays.forEach((day) => {
@@ -315,7 +310,6 @@ export default function ForecastTab({ user }) {
     setSelectedScenarios(nextSelections);
   };
 
-  // Preset: Simulate missing all upcoming periods
   const handleSimulateMissAll = () => {
     const nextSelections = {};
     forecastDays.forEach((day) => {
@@ -326,7 +320,6 @@ export default function ForecastTab({ user }) {
     setSelectedScenarios(nextSelections);
   };
 
-  // Reset custom scenario selections
   const handleResetScenarios = () => {
     setSelectedScenarios({});
   };
@@ -366,17 +359,38 @@ export default function ForecastTab({ user }) {
     }
   };
 
+  // Compute snapshot best/worst case aggregates
+  const snapshotSummary = useMemo(() => {
+    if (!forecastData?.blocks || !forecastData.blocks.length) return null;
+    const blocks = forecastData.blocks;
+    const currentOverall = blocks[0]?.current_overall_pct || 0;
+    
+    // Average or combined outcome
+    const avgPresent = blocks.reduce((sum, b) => sum + (b.overall_if_present || currentOverall), 0) / blocks.length;
+    const avgAbsent = blocks.reduce((sum, b) => sum + (b.overall_if_absent || currentOverall), 0) / blocks.length;
+    const totalDayPeriods = blocks.reduce((sum, b) => sum + (b.periods || 0), 0);
+
+    return {
+      currentOverall,
+      bestOutcome: avgPresent,
+      worstOutcome: avgAbsent,
+      bestDelta: avgPresent - currentOverall,
+      worstDelta: avgAbsent - currentOverall,
+      totalDayPeriods
+    };
+  }, [forecastData]);
+
   return (
     <div>
-      {/* Top View Toggle: Continuous Multi-Day Forecast vs Single-Day Snapshot vs Goal Calculator */}
-      <div className="forecast-view-switch" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* 1. Mode Switcher (Multi-Day | Snapshot | Goal Calc) */}
+      <div className="forecast-view-switch">
         <button
           type="button"
           className={`forecast-view-btn ${viewMode === 'continuous' ? 'active' : ''}`}
           onClick={() => setViewMode('continuous')}
         >
           <TrendingUp size={15} />
-          <span>Multi-Day</span>
+          <span>Multi-Day (14D)</span>
         </button>
         <button
           type="button"
@@ -384,7 +398,7 @@ export default function ForecastTab({ user }) {
           onClick={() => setViewMode('snapshot')}
         >
           <Calendar size={15} />
-          <span>Snapshot</span>
+          <span>Snapshot (FAT)</span>
         </button>
         <button
           type="button"
@@ -398,11 +412,11 @@ export default function ForecastTab({ user }) {
           type="button"
           className="btn btn-secondary btn-sm"
           onClick={handleShareCard}
-          style={{ marginLeft: 'auto', fontSize: '0.72rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-          title="Copy formatted attendance summary card"
+          style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+          title="Copy formatted attendance summary"
         >
-          {copiedShare ? <Check size={13} color="var(--good)" /> : <Share2 size={13} color="var(--accent-gold)" />}
-          <span>{copiedShare ? 'Copied Card!' : 'Share Summary'}</span>
+          {copiedShare ? <Check size={13} color="var(--good)" /> : <Share2 size={13} color="var(--accent-gold-dark)" />}
+          <span>{copiedShare ? 'Copied' : 'Share'}</span>
         </button>
       </div>
 
@@ -411,10 +425,10 @@ export default function ForecastTab({ user }) {
       {/* ========================================================= */}
       {viewMode === 'continuous' && (
         <div>
-          {/* Dynamic Subject Selector Ribbon */}
+          {/* Dynamic Subject Selector Pills */}
           <div className="subject-pills-container">
             {subjectList.map((subj) => {
-              const isActive = selectedSubject === subj.key;
+              const isActive = (selectedSubject === subj.key) || (!selectedSubject && subj.key === 'OVERALL');
               const subjPct = subj.isOverall
                 ? summary?.overall?.percentage
                 : summary?.subjects?.[subj.key]?.percentage;
@@ -438,288 +452,147 @@ export default function ForecastTab({ user }) {
             })}
           </div>
 
-          {/* Current Subject Attendance State Card */}
-          <div className="ledger-card" style={{ marginBottom: '1rem' }}>
-            <div className="card-header-ruled">
-              <div className="card-header-title">
-                <Sparkles size={16} color="var(--accent-gold)" />
-                <span>
-                  {selectedSubject === 'OVERALL'
-                    ? 'Overall Academic Ledger'
-                    : selectedSubject || 'Selected Subject'}
+          {/* Current vs 14-Day Projected Hero Comparison Card */}
+          {finalProjection && (
+            <div className="forecast-hero-comparison">
+              <div className="hero-stat-col">
+                <span className="hero-stat-label">Current State</span>
+                <div className={`hero-stat-number ${currentStats.percentage < 75 ? 'bad' : 'good'}`}>
+                  {currentStats.percentage.toFixed(2)}%
+                </div>
+                <span className="hero-stat-sub">
+                  {currentStats.attended}/{currentStats.total} periods
                 </span>
               </div>
-              <span
-                className={`card-header-badge ${
-                  currentStats.percentage >= 75 ? 'good' : 'bad'
-                }`}
-              >
-                {currentStats.percentage >= 75 ? 'Above 75%' : 'Below 75%'}
-              </span>
-            </div>
 
-            <div className="hero-figure-group">
-              <div>
-                <div
-                  className={`hero-number ${
-                    currentStats.percentage < 75 ? 'below-threshold' : ''
-                  }`}
-                >
-                  {currentStats.percentage.toFixed(2)}
-                  <span style={{ fontSize: '1.5rem', fontWeight: 600 }}>%</span>
+              <div className="hero-arrow-col">
+                <div className={`delta-badge ${finalProjection.netDelta >= 0 ? 'pos' : 'neg'}`}>
+                  {finalProjection.netDelta >= 0 ? `+${finalProjection.netDelta.toFixed(2)}%` : `${finalProjection.netDelta.toFixed(2)}%`}
                 </div>
-                <div
-                  style={{
-                    fontSize: '0.85rem',
-                    color: 'var(--ink-soft)',
-                    fontFamily: 'var(--font-mono)',
-                    marginTop: '0.25rem'
-                  }}
-                >
-                  {currentStats.attended} / {currentStats.total} classes attended
-                </div>
+                <div className="arrow-symbol">→</div>
+                <span className="horizon-sub">14-Day Outlook</span>
               </div>
 
-              <div style={{ textAlign: 'right' }}>
-                {currentStats.percentage >= 75 ? (
-                  <div
-                    style={{
-                      fontSize: '0.8rem',
-                      color: 'var(--good)',
-                      fontFamily: 'var(--font-mono)'
-                    }}
-                  >
-                    <strong>Safe to bunk:</strong> {currentStats.safe_to_miss} classes
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      fontSize: '0.8rem',
-                      color: 'var(--bad)',
-                      fontFamily: 'var(--font-mono)'
-                    }}
-                  >
-                    <strong>Must attend:</strong> {currentStats.must_attend_next} classes
-                  </div>
-                )}
+              <div className="hero-stat-col" style={{ textAlign: 'right' }}>
+                <span className="hero-stat-label">Projected Outcome</span>
+                <div className={`hero-stat-number ${finalProjection.percentage < 75 ? 'bad' : 'good'}`}>
+                  {finalProjection.percentage.toFixed(2)}%
+                </div>
+                <span className="hero-stat-sub">
+                  {finalProjection.attended}/{finalProjection.total} periods
+                </span>
               </div>
             </div>
+          )}
 
-            {/* Quick Simulation Presets */}
-            <div className="forecast-preset-bar">
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--ink-soft)',
-                  fontWeight: 600
-                }}
+          {/* Quick Simulation Presets Toolbar */}
+          <div className="forecast-preset-bar">
+            <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--ink-soft)', fontWeight: 600 }}>
+              Simulation Presets:
+            </span>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleSimulateAttendAll}
+                title="Simulate 100% attendance over upcoming 14 days"
               >
-                Simulation Presets:
-              </span>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleSimulateAttendAll}
-                  title="Simulate attending all upcoming classes"
-                >
-                  <CheckCircle2 size={13} color="var(--good)" />
-                  <span>Attend All</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleSimulateMissAll}
-                  title="Simulate missing all upcoming classes"
-                >
-                  <XCircle size={13} color="var(--bad)" />
-                  <span>Miss All</span>
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleResetScenarios}
-                  title="Reset scenarios"
-                >
-                  <RotateCcw size={13} />
-                  <span>Reset</span>
-                </button>
-              </div>
+                <CheckCircle2 size={13} color="var(--good)" />
+                <span>Attend All</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleSimulateMissAll}
+                title="Simulate 0% attendance over upcoming 14 days"
+              >
+                <XCircle size={13} color="var(--bad)" />
+                <span>Miss All</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleResetScenarios}
+                title="Reset simulation to default"
+              >
+                <RotateCcw size={13} />
+                <span>Reset</span>
+              </button>
             </div>
           </div>
 
-          {/* Sequential Multi-Day Timeline */}
+          {/* Sequential 14-Day Trajectory */}
           <div className="forecast-timeline">
-            {multiDayProjections.map((day, idx) => {
-              const isSelectedDayClass = day.hasClasses;
+            {multiDayProjections.map((day) => {
+              if (!day.hasClasses || day.isSunday) {
+                return (
+                  <div key={day.dateStr} className="forecast-rest-day">
+                    <span>☕ {day.shortDay}, {day.formattedDate} — {day.isSunday ? 'Institutional Holiday' : 'No periods scheduled'}</span>
+                    <span>Rolls forward at <strong>{day.resultingPercentage.toFixed(2)}%</strong></span>
+                  </div>
+                );
+              }
 
               return (
-                <div
-                  key={day.dateStr}
-                  className={`forecast-day-card ${day.isSunday ? 'holiday' : ''}`}
-                >
-                  {/* Day Header */}
+                <div key={day.dateStr} className="forecast-day-card">
+                  {/* Clean Day Header */}
                   <div className="forecast-day-header">
                     <div>
                       <strong style={{ fontSize: '0.95rem', color: 'var(--ink)' }}>
-                        {day.isToday
-                          ? `Today — ${day.formattedDate} (${day.shortDay})`
-                          : `${day.formattedDate} (${day.shortDay})`}
+                        {day.shortDay}, {day.formattedDate}
                       </strong>
-                      <div
-                        style={{
-                          fontSize: '0.75rem',
-                          color: 'var(--ink-soft)',
-                          fontFamily: 'var(--font-mono)',
-                          marginTop: '0.1rem'
-                        }}
-                      >
-                        {day.isSunday
-                          ? 'Sunday — College Holiday'
-                          : day.periods === 0
-                          ? `No ${selectedSubject === 'OVERALL' ? 'classes' : selectedSubject} periods scheduled`
-                          : `${day.periods} ${day.periods === 1 ? 'Period' : 'Periods'} scheduled`}
+                      <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                        {day.periods} {day.periods === 1 ? 'Period' : 'Periods'} scheduled • Starts from {day.startingPercentage.toFixed(2)}%
                       </div>
                     </div>
 
-                    {/* Projected State Badge */}
                     <div style={{ textAlign: 'right' }}>
                       <span
                         className="mono-num"
                         style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          color:
-                            day.resultingPercentage >= 75
-                              ? 'var(--good)'
-                              : 'var(--bad)'
+                          fontSize: '1.1rem',
+                          fontWeight: 800,
+                          color: day.resultingPercentage >= 75 ? 'var(--good)' : 'var(--bad)'
                         }}
                       >
                         {day.resultingPercentage.toFixed(2)}%
                       </span>
-                      <div
-                        style={{
-                          fontSize: '0.7rem',
-                          color: 'var(--ink-soft)',
-                          fontFamily: 'var(--font-mono)'
-                        }}
-                      >
-                        {day.resultingAttended} / {day.resultingTotal}
+                      <div style={{ fontSize: '0.7rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                        {day.resultingAttended}/{day.resultingTotal}
                       </div>
                     </div>
                   </div>
 
-                  {/* Scenarios Grid (if subject occurs on this day) */}
-                  {isSelectedDayClass ? (
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '0.725rem',
-                          color: 'var(--ink-soft)',
-                          fontFamily: 'var(--font-mono)',
-                          marginBottom: '0.4rem',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <span>
-                          Starting from previous day:{' '}
-                          <strong>
-                            {day.startingAttended}/{day.startingTotal} (
-                            {day.startingPercentage.toFixed(2)}%)
-                          </strong>
-                        </span>
-                        <span style={{ fontSize: '0.675rem', color: 'var(--accent-gold)' }}>
-                          Tap scenario to select branch
-                        </span>
-                      </div>
+                  {/* Compact Scenario Pill Buttons */}
+                  <div className="scenario-pill-group">
+                    {day.scenarios.map((sc) => {
+                      const isSelected = day.selectedScenario?.k === sc.k;
+                      const deltaText = sc.delta > 0
+                        ? `+${sc.delta.toFixed(2)}%`
+                        : sc.delta < 0
+                        ? `${sc.delta.toFixed(2)}%`
+                        : '0.00%';
 
-                      <div className="forecast-scenarios-grid">
-                        {day.scenarios.map((sc) => {
-                          const isSelected = day.selectedScenario?.k === sc.k;
-                          const deltaText =
-                            sc.delta > 0
-                              ? `+${sc.delta.toFixed(2)}%`
-                              : sc.delta < 0
-                              ? `${sc.delta.toFixed(2)}%`
-                              : '0.00%';
-
-                          return (
-                            <div
-                              key={sc.k}
-                              className={`scenario-card ${isSelected ? 'selected' : ''}`}
-                              onClick={() => handleSelectScenario(day.dateStr, sc.k)}
-                            >
-                              <div className="scenario-title">
-                                {sc.label}
-                                {isSelected && ' ✓'}
-                              </div>
-                              <div
-                                className="scenario-pct"
-                                style={{
-                                  color:
-                                    sc.projectedPercentage >= 75
-                                      ? 'var(--good)'
-                                      : 'var(--bad)'
-                                }}
-                              >
-                                {sc.projectedPercentage.toFixed(2)}%
-                              </div>
-                              <div
-                                className="scenario-delta"
-                                style={{
-                                  color:
-                                    sc.delta > 0
-                                      ? 'var(--good)'
-                                      : sc.delta < 0
-                                      ? 'var(--bad)'
-                                      : 'var(--ink-soft)'
-                                }}
-                              >
-                                {deltaText} · {sc.projectedAttended}/{sc.projectedTotal}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: '0.5rem',
-                          fontSize: '0.725rem',
-                          color: 'var(--ink-soft)',
-                          fontFamily: 'var(--font-mono)',
-                          background: 'var(--surface-alt)',
-                          padding: '0.35rem 0.6rem',
-                          borderRadius: 'var(--radius-sm)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.4rem'
-                        }}
-                      >
-                        <ArrowRight size={12} color="var(--accent-gold)" />
-                        <span>
-                          Selected: <strong>{day.selectedScenario?.label}</strong> →{' '}
-                          <strong>{day.resultingPercentage.toFixed(2)}%</strong> ({day.resultingAttended}/{day.resultingTotal}). Next day projects from this outcome.
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--ink-soft)',
-                        fontFamily: 'var(--font-mono)',
-                        padding: '0.35rem 0'
-                      }}
-                    >
-                      {day.isSunday
-                        ? 'Sunday is a fixed holiday. Attendance unaffected.'
-                        : `No periods for ${selectedSubject === 'OVERALL' ? 'any subject' : selectedSubject}. Attendance rolls forward unaffected.`}
-                    </div>
-                  )}
+                      return (
+                        <button
+                          key={sc.k}
+                          type="button"
+                          className={`scenario-pill-btn ${isSelected ? 'active' : ''}`}
+                          onClick={() => handleSelectScenario(day.dateStr, sc.k)}
+                        >
+                          <span className="scenario-pill-label">
+                            {sc.label} {isSelected && '✓'}
+                          </span>
+                          <span className="scenario-pill-pct">
+                            {sc.projectedPercentage.toFixed(2)}%
+                          </span>
+                          <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-mono)', opacity: 0.85 }}>
+                            {deltaText}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -728,39 +601,42 @@ export default function ForecastTab({ user }) {
       )}
 
       {/* ========================================================= */}
-      {/* MODE 2: EXISTING SINGLE-DAY SNAPSHOT (FAT TOOL)          */}
+      {/* MODE 2: ORGANIZED SINGLE-DAY SNAPSHOT (FAT TOOL)          */}
       {/* ========================================================= */}
       {viewMode === 'snapshot' && (
         <div>
-          {/* Date Ribbon */}
+          {/* Horizontal Date Ribbon */}
           <div className="week-navigator-ribbon">
             {nextDays.map((d) => (
-              <div
+              <button
                 key={d.dateStr}
+                type="button"
                 className={`ribbon-day-cell ${selectedDate === d.dateStr ? 'active' : ''}`}
                 onClick={() => setSelectedDate(d.dateStr)}
               >
-                <div className="ribbon-day-label">{d.dayName}</div>
-                <div className="ribbon-day-num">{d.dayNum}</div>
-                <div className={`ribbon-status-dot ${d.isSunday ? 'holiday' : ''}`} />
-              </div>
+                <span className="ribbon-day-label">{d.dayName}</span>
+                <span className="ribbon-day-num">{d.dayNum}</span>
+                <span className={`ribbon-status-dot ${d.isSunday ? 'holiday' : ''}`} />
+              </button>
             ))}
           </div>
 
           <div className="ledger-card">
+            {/* Header */}
             <div className="card-header-ruled">
               <div>
                 <div className="card-header-title">
-                  <Sparkles size={16} color="var(--accent-gold)" />
-                  <span>FAT — Single-Day Period Simulations</span>
+                  FAT — Single-Day Period Impact
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-                  {forecastData?.day_name} ({selectedDate}) Outcome Projections
+                <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                  {forecastData?.day_name || 'Selected Day'} ({selectedDate})
                 </div>
               </div>
 
-              <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', textAlign: 'right' }}>
-                Current: <strong style={{ color: 'var(--ink)' }}>{forecastData?.blocks?.[0]?.current_overall_pct?.toFixed(2) || '—'}%</strong>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                  Current: <strong style={{ color: 'var(--ink)' }}>{snapshotSummary?.currentOverall?.toFixed(2) || '—'}%</strong>
+                </span>
               </div>
             </div>
 
@@ -772,62 +648,85 @@ export default function ForecastTab({ user }) {
             )}
 
             {loading ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
-                Simulating period outcomes...
+              <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
+                Calculating period outcomes...
               </div>
             ) : forecastData?.is_holiday ? (
-              <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--surface-alt)', borderRadius: 'var(--radius-md)' }}>
-                <h4 className="heading-ledger" style={{ color: 'var(--accent-gold)', fontSize: '1rem' }}>Sunday — Holiday</h4>
-                <p style={{ fontSize: '0.775rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
-                  No periods scheduled. Aggregate attendance percentage is unaffected.
+              <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', background: 'var(--surface-alt)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>☕</div>
+                <h4 className="heading-ledger" style={{ color: 'var(--accent-gold-dark)', fontSize: '1.1rem' }}>Sunday — Holiday</h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
+                  No classes scheduled. Attendance aggregate is completely unaffected.
                 </p>
               </div>
             ) : forecastData?.blocks?.length === 0 ? (
               <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--surface-alt)', borderRadius: 'var(--radius-md)', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
-                No scheduled periods found for this date.
+                No periods scheduled for this date.
               </div>
             ) : (
-              <div className="forecast-pc-grid">
-                {forecastData?.blocks?.map((block) => (
-                  <div
-                    key={block.block_id}
-                    style={{
-                      background: 'var(--surface-alt)',
-                      border: '1px solid var(--rule)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '0.85rem'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                        <span className="block-index-badge">#{block.order_index}</span>
-                        <strong style={{ fontSize: '0.95rem', color: 'var(--ink)' }}>{block.subject}</strong>
-                        <span className="mono-num" style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>
-                          [{block.periods} {block.periods === 1 ? 'Period' : 'Periods'}]
-                        </span>
+              <div>
+                {/* Day Outcome Overview (Best Case vs Worst Case) */}
+                {snapshotSummary && (
+                  <div className="fat-day-overview">
+                    <div className="fat-overview-box good">
+                      <div className="fat-overview-label">Best Case (All Present)</div>
+                      <div className="fat-overview-pct">{snapshotSummary.bestOutcome.toFixed(2)}%</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--good)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                        +{snapshotSummary.bestDelta.toFixed(2)}% lift across {snapshotSummary.totalDayPeriods} periods
                       </div>
-
-                      <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-                        Subj: {block.current_subject_pct?.toFixed(1)}%
-                      </span>
                     </div>
 
-                    {/* Two-Outcome Comparison Side by Side */}
-                    <div className="fat-comparison-grid">
-                      <div className="fat-box present">
-                        <div className="fat-box-label">If Present</div>
-                        <div className="fat-box-pct">{block.overall_if_present?.toFixed(2)}%</div>
-                        <div className="fat-box-sub">Subject: {block.subject_if_present?.toFixed(1)}%</div>
-                      </div>
-
-                      <div className="fat-box absent">
-                        <div className="fat-box-label">If Absent</div>
-                        <div className="fat-box-pct">{block.overall_if_absent?.toFixed(2)}%</div>
-                        <div className="fat-box-sub">Subject: {block.subject_if_absent?.toFixed(1)}%</div>
+                    <div className="fat-overview-box bad">
+                      <div className="fat-overview-label">Worst Case (All Absent)</div>
+                      <div className="fat-overview-pct">{snapshotSummary.worstOutcome.toFixed(2)}%</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--bad)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                        {snapshotSummary.worstDelta.toFixed(2)}% drop across {snapshotSummary.totalDayPeriods} periods
                       </div>
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* Individual Period Outcomes Breakdown */}
+                <div style={{ margin: '1.25rem 0 0.65rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', color: 'var(--ink)', fontWeight: 700, fontFamily: 'var(--font-serif)' }}>
+                    Period-by-Period Sensitivity
+                  </h4>
+                </div>
+
+                <div className="forecast-pc-grid">
+                  {forecastData?.blocks?.map((block) => (
+                    <div key={block.block_id} className="fat-period-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                          <span className="block-index-badge">#{block.order_index}</span>
+                          <strong style={{ fontSize: '0.95rem', color: 'var(--ink)' }}>{block.subject}</strong>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                            [{block.periods} {block.periods === 1 ? 'Period' : 'Periods'}]
+                          </span>
+                        </div>
+
+                        <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                          Subj: {block.current_subject_pct?.toFixed(1)}%
+                        </span>
+                      </div>
+
+                      {/* Side by side comparison */}
+                      <div className="fat-period-outcomes">
+                        <div className="fat-outcome-pill present">
+                          <div className="fat-outcome-title">If Present</div>
+                          <div className="fat-outcome-main">{block.overall_if_present?.toFixed(2)}%</div>
+                          <div className="fat-outcome-sub">Subject: {block.subject_if_present?.toFixed(1)}%</div>
+                        </div>
+
+                        <div className="fat-outcome-pill absent">
+                          <div className="fat-outcome-title">If Absent</div>
+                          <div className="fat-outcome-main">{block.overall_if_absent?.toFixed(2)}%</div>
+                          <div className="fat-outcome-sub">Subject: {block.subject_if_absent?.toFixed(1)}%</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -843,96 +742,64 @@ export default function ForecastTab({ user }) {
             <div>
               <span className="card-header-title">Target Attendance Goal Simulator</span>
               <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-                Calculate exact periods & calendar date required to reach any target percentage
+                Calculate exact periods required to reach any target percentage
               </div>
             </div>
-            <span className="card-header-badge good">Dynamic FAT Engine</span>
+            <span className="card-header-badge good">FAT Engine</span>
           </div>
 
-          <div style={{ margin: '1rem 0' }}>
-            <label style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', display: 'block', marginBottom: '0.4rem' }}>
-              Choose or Enter Desired Target Percentage:
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-              {[75, 80, 85, 90].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  className={`btn btn-sm ${targetPct === preset ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setTargetPct(preset)}
-                  style={{ minWidth: '70px', fontWeight: 700 }}
-                >
-                  {preset}% {preset === 75 ? '(Pass)' : preset === 85 ? '(Distinction)' : ''}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', maxWidth: '240px' }}>
-              <input
-                type="number"
-                className="input-text"
-                min="1"
-                max="100"
-                step="0.5"
-                value={targetPct}
-                onChange={(e) => setTargetPct(parseFloat(e.target.value) || 75)}
-                style={{ textAlign: 'center', fontWeight: 700, fontSize: '1rem' }}
-              />
-              <span style={{ fontWeight: 700, color: 'var(--ink)' }}>%</span>
-            </div>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+            {[75, 80, 85, 90].map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                className={`btn btn-sm ${targetPct === pct ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setTargetPct(pct)}
+              >
+                Target {pct}%
+              </button>
+            ))}
           </div>
 
           {targetLoading ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--ink-soft)' }}>
-              Computing timetable projection...
+              Calculating trajectory...
             </div>
           ) : targetResult ? (
-            <div style={{ background: 'var(--surface-alt)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--rule)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <div className="hero-figure-group" style={{ margin: '0.5rem 0 1rem' }}>
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>CURRENT STATUS</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                    {targetResult.current_percentage.toFixed(2)}%
+                  <div className="hero-number">
+                    {targetResult.required_periods || 0}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                    Consecutive periods needed to achieve {targetPct}%
                   </div>
                 </div>
 
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)' }}>TARGET GOAL</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-gold)', fontFamily: 'var(--font-mono)' }}>
-                    {targetResult.target_percentage}%
-                  </div>
+                <div style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
+                  <div>Current: <strong>{targetResult.current_percentage?.toFixed(2)}%</strong></div>
+                  <div>Estimated Date: <strong>{targetResult.target_date || 'In progress'}</strong></div>
                 </div>
               </div>
 
-              {targetResult.status === 'above_target' ? (
-                <div className="bunk-banner good">
-                  <CheckCircle2 size={18} />
-                  <div>
-                    <strong>Already Above Target!</strong> You are currently at {targetResult.current_percentage.toFixed(2)}%. You can safely miss <strong>{targetResult.safe_to_miss} periods</strong> while staying at or above {targetResult.target_percentage}%.
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="bunk-banner bad" style={{ marginBottom: '0.75rem' }}>
+              <div className={`bunk-banner ${targetResult.required_periods > 0 ? 'bad' : 'good'}`}>
+                {targetResult.required_periods > 0 ? (
+                  <>
                     <AlertTriangle size={18} />
                     <div>
-                      <strong>Must attend {targetResult.periods_needed} consecutive periods</strong> to reach {targetResult.target_percentage}%.
+                      You need to attend <strong>{targetResult.required_periods} periods</strong> in a row without absence to reach {targetPct}%.
                     </div>
-                  </div>
-
-                  {targetResult.projected_date && (
-                    <div style={{ padding: '0.75rem', background: 'var(--surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule)', fontSize: '0.85rem' }}>
-                      📅 <strong>Estimated Completion Date:</strong>{' '}
-                      <span style={{ color: 'var(--good)', fontWeight: 700 }}>
-                        {new Date(targetResult.projected_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
-                      </span>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginTop: '0.2rem' }}>
-                        Calculated by mapping upcoming classes in Section {user?.section_label || 'timetable'}.
-                      </div>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    <div>
+                      You have already surpassed {targetPct}%! Buffer safe.
                     </div>
-                  )}
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           ) : null}
         </div>

@@ -4,12 +4,13 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Layers, 
-  Download, 
   Award, 
   ShieldCheck, 
-  ArrowUpDown,
   FileSpreadsheet,
-  CalendarCheck
+  Database,
+  Cpu,
+  Code,
+  BookOpen
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -31,14 +32,23 @@ function DashboardTabComponent({ summary, user }) {
   };
 
   const getTier = (pct) => {
-    if (pct >= 85) return { label: 'Distinction (≥85%)', icon: Award, color: 'var(--good)', badgeClass: 'good' };
-    if (pct >= 75) return { label: 'Safe Zone (≥75%)', icon: ShieldCheck, color: 'var(--good)', badgeClass: 'good' };
-    if (pct >= 70) return { label: 'Borderline (70-74%)', icon: AlertTriangle, color: 'var(--accent-gold)', badgeClass: 'bad' };
-    return { label: 'Detention Alert (<70%)', icon: ShieldAlert, color: 'var(--bad)', badgeClass: 'bad' };
+    if (pct >= 85) return { label: 'Distinction (≥85%)', icon: Award, badgeClass: 'good' };
+    if (pct >= 75) return { label: 'Safe Zone (≥75%)', icon: ShieldCheck, badgeClass: 'good' };
+    if (pct >= 70) return { label: 'Borderline (70-74%)', icon: AlertTriangle, badgeClass: 'gold' };
+    return { label: 'Detention Alert (<70%)', icon: ShieldAlert, badgeClass: 'bad' };
   };
 
   const tier = useMemo(() => getTier(overall.percentage), [overall.percentage]);
   const TierIcon = tier.icon;
+
+  const getSubjectIcon = (subjectName = '') => {
+    const s = subjectName.toUpperCase();
+    if (s.includes('DBMS') || s.includes('DATABASE') || s.includes('SQL')) return Database;
+    if (s.includes('DLCO') || s.includes('COA') || s.includes('CHIP') || s.includes('HARDWARE')) return Cpu;
+    if (s.includes('LAB') || s.includes('JAVA') || s.includes('PYTHON') || s.includes('CPP') || s.includes('DSA')) return Code;
+    if (s.includes('FLAT') || s.includes('MATH') || s.includes('STAT')) return BookOpen;
+    return Layers;
+  };
 
   const subjects = useMemo(() => {
     let list = Object.values(summary?.subjects || {});
@@ -63,13 +73,13 @@ function DashboardTabComponent({ summary, user }) {
 
   return (
     <div>
-      {/* Hero Overall Aggregate Card */}
+      {/* 1. Overall Aggregate Hero Card */}
       <div className="ledger-card">
         <div className="card-header-ruled">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <span className="card-header-title">Overall Attendance Register</span>
-            <span className={`card-header-badge ${tier.badgeClass}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-              <TierIcon size={12} />
+            <span className={`card-header-badge ${tier.badgeClass}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              <TierIcon size={13} />
               {tier.label}
             </span>
           </div>
@@ -78,10 +88,10 @@ function DashboardTabComponent({ summary, user }) {
             className="btn btn-secondary btn-sm" 
             onClick={handleExportCsv} 
             disabled={exporting}
-            style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+            style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             title="Download CSV Attendance Ledger"
           >
-            <FileSpreadsheet size={13} color="var(--accent-gold)" />
+            <FileSpreadsheet size={14} color="var(--accent-gold-dark)" />
             <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
           </button>
         </div>
@@ -91,14 +101,14 @@ function DashboardTabComponent({ summary, user }) {
             <div className={`hero-number ${overall.is_below_threshold ? 'below-threshold red-ink-flag' : ''}`}>
               {overall.percentage.toFixed(2)}%
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.35rem' }}>
+            <div style={{ fontSize: '0.825rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.45rem' }}>
               {overall.attended} Attended / {overall.total} Total Periods
             </div>
           </div>
 
-          <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
-            <div>Baseline: {overall.baseline_attended}/{overall.baseline_total}</div>
-            <div>Logged: +{overall.logged_attended}/+{overall.logged_total}</div>
+          <div style={{ textAlign: 'right', fontSize: '0.775rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
+            <div>Baseline: <strong>{overall.baseline_attended}/{overall.baseline_total}</strong></div>
+            <div>Logged: <strong>+{overall.logged_attended}/+{overall.logged_total}</strong></div>
           </div>
         </div>
 
@@ -114,28 +124,29 @@ function DashboardTabComponent({ summary, user }) {
         <div className={`bunk-banner ${overall.is_below_threshold ? 'bad' : 'good'}`}>
           {overall.is_below_threshold ? (
             <>
-              <ShieldAlert size={18} />
+              <ShieldAlert size={20} />
               <div>
                 <strong>Must attend next {overall.must_attend_next} periods</strong> consecutively to climb back to 75%.
               </div>
             </>
           ) : (
             <>
-              <CheckCircle2 size={18} />
+              <CheckCircle2 size={20} />
               <div>
-                <strong>Safe to miss {overall.safe_to_miss} periods</strong> while staying compliant $\ge$ 75%.
+                <strong>Safe to miss {overall.safe_to_miss} periods</strong> while maintaining compliance $\ge$ 75%.
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* Subject-Wise Ledger Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1.25rem 0 0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <h3 className="heading-ledger" style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
-          <Layers size={16} color="var(--accent-gold)" />
+      {/* 2. Subject-Wise Ledger Section */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1.35rem 0 0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <h3 className="section-headline" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
+          <Layers size={18} color="var(--accent-gold-dark)" />
           <span>Subject-Wise Register</span>
         </h3>
+        
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>
             {subjects.length} Subjects
@@ -144,7 +155,7 @@ function DashboardTabComponent({ summary, user }) {
             value={sortBy} 
             onChange={(e) => setSortBy(e.target.value)}
             className="input-select"
-            style={{ fontSize: '0.72rem', padding: '0.2rem 0.4rem', background: 'var(--surface-alt)' }}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
           >
             <option value="default">Default Order</option>
             <option value="lowest">Lowest % First</option>
@@ -153,19 +164,33 @@ function DashboardTabComponent({ summary, user }) {
         </div>
       </div>
 
-      {/* Subject-Wise Cards */}
+      {/* 3. Subject-Wise Cards Grid */}
       <div className="subject-pc-grid">
         {subjects.map((subj) => {
           const hasLogs = subj.total > 0;
+          const Icon = getSubjectIcon(subj.subject);
+
           return (
-            <div key={subj.subject} className="ledger-card" style={{ marginBottom: '0.85rem' }}>
+            <div 
+              key={subj.subject} 
+              className="ledger-card" 
+              style={{ 
+                marginBottom: '0.85rem',
+                borderLeft: `4px solid ${subj.is_below_threshold && hasLogs ? 'var(--bad)' : 'var(--brand-forest)'}`
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h4 style={{ fontSize: '1rem', color: 'var(--ink)', fontWeight: 700 }}>
-                    {subj.subject}
-                  </h4>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                    {subj.attended} / {subj.total} periods attended {subj.holiday_periods > 0 && `· ${subj.holiday_periods} hol`}
+                <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center' }}>
+                  <div className="subject-icon-box" style={{ width: '38px', height: '38px' }}>
+                    <Icon size={18} />
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '1.05rem', color: 'var(--ink)', fontWeight: 700 }}>
+                      {subj.subject}
+                    </h4>
+                    <div style={{ fontSize: '0.775rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                      {subj.attended} / {subj.total} periods attended {subj.holiday_periods > 0 && `• ${subj.holiday_periods} hol`}
+                    </div>
                   </div>
                 </div>
 
@@ -173,9 +198,9 @@ function DashboardTabComponent({ summary, user }) {
                   <span
                     className="mono-num"
                     style={{
-                      fontSize: '1.25rem',
-                      fontWeight: 700,
-                      color: subj.is_below_threshold && hasLogs ? 'var(--bad)' : 'var(--good)'
+                      fontSize: '1.35rem',
+                      fontWeight: 800,
+                      color: subj.is_below_threshold && hasLogs ? 'var(--bad)' : 'var(--brand-forest)'
                     }}
                   >
                     {hasLogs ? `${subj.percentage.toFixed(1)}%` : '—'}
@@ -183,7 +208,7 @@ function DashboardTabComponent({ summary, user }) {
                 </div>
               </div>
 
-              <div className="progress-rule-track">
+              <div className="progress-rule-track" style={{ height: '6px', margin: '0.75rem 0 0.5rem' }}>
                 <div
                   className={`progress-rule-fill ${subj.is_below_threshold && hasLogs ? 'bad' : 'good'}`}
                   style={{ width: `${hasLogs ? Math.min(100, Math.max(0, subj.percentage)) : 0}%` }}
@@ -191,14 +216,14 @@ function DashboardTabComponent({ summary, user }) {
               </div>
 
               {hasLogs && (
-                <div style={{ marginTop: '0.6rem', fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>
                   {subj.is_below_threshold ? (
-                    <span style={{ color: 'var(--bad)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <AlertTriangle size={13} /> Need +{subj.must_attend_next} consecutive periods
+                    <span style={{ color: 'var(--bad)', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
+                      <AlertTriangle size={14} /> Need +{subj.must_attend_next} consecutive periods
                     </span>
                   ) : (
-                    <span style={{ color: 'var(--good)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <CheckCircle2 size={13} /> Buffer: {subj.safe_to_miss} periods safe to miss
+                    <span style={{ color: 'var(--good)', display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
+                      <CheckCircle2 size={14} /> Buffer: {subj.safe_to_miss} periods safe to miss
                     </span>
                   )}
                 </div>

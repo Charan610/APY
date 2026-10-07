@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api, setAuthToken, setStoredUser } from '../api';
 import TimetableBuilder from './TimetableBuilder';
-import { User, Lock, BookOpen, AlertCircle, CheckCircle2, GraduationCap, ShieldCheck } from 'lucide-react';
+import { User, Lock, BookOpen, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 
 export default function AuthModal({ onAuthSuccess }) {
   const DEFAULT_SECTIONS = [
@@ -149,10 +150,12 @@ export default function AuthModal({ onAuthSuccess }) {
       <div className="modal-dialog" style={{ maxWidth: isCustomSection && mode === 'register' ? '640px' : '440px' }}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-          <div className="brand-crest" style={{ margin: '0 auto 0.75rem', width: '52px', height: '52px' }}>
-            <GraduationCap size={28} className="brand-icon-glyph" />
+          <div style={{ margin: '0 auto 0.75rem', display: 'flex', justifyContent: 'center' }}>
+            <BrandLogo size={56} />
           </div>
-          <h2 className="heading-ledger" style={{ fontSize: '1.35rem' }}>ATT PER Y</h2>
+          <h2 className="heading-ledger font-serif" style={{ fontSize: '1.45rem' }}>
+            <span style={{ color: '#c5a059' }}>ATT</span> <span style={{ color: 'var(--brand-forest)' }}>PER Y</span>
+          </h2>
           <p style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
             Academic Ledger & Bunk Forecaster
           </p>

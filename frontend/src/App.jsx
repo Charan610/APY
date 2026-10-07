@@ -1,5 +1,5 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { api, getStoredUser, setAuthToken, setStoredUser, checkIsAdmin } from './api';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import { api, getStoredUser, getAuthToken, setAuthToken, setStoredUser, checkIsAdmin } from './api';
 import Header from './components/Header';
 import AuthModal from './components/AuthModal';
 import TodayTab from './components/TodayTab';
@@ -7,9 +7,11 @@ import DashboardTab from './components/DashboardTab';
 import TimetableTab from './components/TimetableTab';
 import ForecastTab from './components/ForecastTab';
 import OfflineBanner from './components/OfflineBanner';
+import LiquidNavbar from './components/LiquidNavbar';
+import AppLaunchExperience from './components/AppLaunchExperience';
 import { registerServiceWorker } from './notifications';
 import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
-import { CalendarCheck, LayoutDashboard, Calendar, Sparkles, ShieldCheck, GraduationCap } from 'lucide-react';
+import BrandLogo from './components/BrandLogo';
 
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const NotificationPromptModal = lazy(() => import('./components/NotificationPromptModal'));
@@ -55,6 +57,66 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState('profile');
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const headerLogoRef = useRef(null);
+  const attendanceTargetRef = useRef(null);
+  const todayAttendanceRef = attendanceTargetRef;
+  const [hasPlayedIntro, setHasPlayedIntro] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [introStage, setIntroStage] = useState(() => {
+    try {
+      if (sessionStorage.getItem('apy_intro_played') === 'true') {
+        return 'complete';
+      }
+    } catch {}
+    return 'logo-center';
+  });
+
+  // Continuous unified intro timeline for authenticated users
+  useEffect(() => {
+    if (!user || hasPlayedIntro) {
+      setIntroStage('complete');
+      return;
+    }
+
+    const isReduced = typeof window !== 'undefined' && 
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isReduced) {
+      setIntroStage('complete');
+      setHasPlayedIntro(true);
+      return;
+    }
+
+    // Sequence:
+    // 0ms: 'logo-center' (Logo + ATT PER Y in center)
+    // 450ms: 'glide-to-header' (Logo + ATT PER Y physically glide into real header)
+    // 1200ms: 'attendance-large' (Attendance visualization appears large in center)
+    // 2700ms: 'attendance-shrink' (Large visualization smoothly shrinks into Today layout)
+    // 3500ms: 'complete' (Permanent interactive Today component)
+
+    const t1 = setTimeout(() => setIntroStage('glide-to-header'), 450);
+    const t2 = setTimeout(() => setIntroStage('attendance-large'), 1200);
+    const t3 = setTimeout(() => setIntroStage('attendance-shrink'), 2700);
+    const t4 = setTimeout(() => {
+      setIntroStage('complete');
+      setHasPlayedIntro(true);
+      try {
+        sessionStorage.setItem('apy_intro_played', 'true');
+      } catch {}
+    }, 3500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+    };
+  }, [user, hasPlayedIntro]);
 
   useEffect(() => {
     // 1. Initialize background service worker
@@ -251,16 +313,24 @@ export default function App() {
     setSummary(null);
     setActiveTab('today');
     setShowNotifPrompt(false);
+    setHasPlayedIntro(false);
+    setIntroStage('logo-center');
+    try {
+      sessionStorage.removeItem('apy_intro_played');
+    } catch {}
   };
 
   if (loading) {
     return (
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-          <div className="brand-crest" style={{ animation: 'pulse 1.5s ease-in-out infinite', width: '48px', height: '48px' }}>
-            <GraduationCap size={26} className="brand-icon-glyph" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>
+            <BrandLogo size={56} />
           </div>
-          <div className="font-serif" style={{ fontSize: '1rem', fontWeight: 600 }}>Loading ATT PER Y...</div>
+          <div className="font-serif" style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+            <span style={{ color: '#c5a059' }}>ATT</span> <span style={{ color: 'var(--brand-forest)' }}>PER Y</span>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)' }}>Academic Ledger</div>
         </div>
       </div>
     );
@@ -288,6 +358,8 @@ export default function App() {
             onOpenAdmin={() => setShowAdminModal(true)}
             onLogout={handleLogout}
             hasUpdate={hasUpdate}
+            brandLogoRef={headerLogoRef}
+            introStage={introStage}
           />
 
           {/* Real-time Update Notification Banner for Previous Versions */}
@@ -354,6 +426,8 @@ export default function App() {
                 user={user}
                 summary={summary}
                 onAttendanceUpdated={handleAttendanceUpdated}
+                introStage={introStage}
+                attendanceTargetRef={attendanceTargetRef}
               />
             )}
 
@@ -378,61 +452,31 @@ export default function App() {
             )}
           </main>
 
-          {/* Persistent Bottom Tab Bar (4 Destinations: Today · Dashboard · Timetable · Forecast) */}
-          <nav className="bottom-tab-bar">
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === 'today' ? 'active' : ''}`}
-              onClick={() => setActiveTab('today')}
-            >
-              <CalendarCheck size={18} />
-              <span>Today</span>
-              {activeTab === 'today' && <div className="tab-indicator" />}
-            </button>
+          {/* Floating Liquid-Glass Bottom Navigation Bar */}
+          <LiquidNavbar
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+            isAdmin={checkIsAdmin(user)}
+            onOpenAdmin={() => setShowAdminModal(true)}
+          />
 
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              <LayoutDashboard size={18} />
-              <span>Dashboard</span>
-              {activeTab === 'dashboard' && <div className="tab-indicator" />}
-            </button>
-
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`}
-              onClick={() => setActiveTab('timetable')}
-            >
-              <Calendar size={18} />
-              <span>Timetable</span>
-              {activeTab === 'timetable' && <div className="tab-indicator" />}
-            </button>
-
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === 'forecast' ? 'active' : ''}`}
-              onClick={() => setActiveTab('forecast')}
-            >
-              <Sparkles size={18} />
-              <span>Forecast</span>
-              {activeTab === 'forecast' && <div className="tab-indicator" />}
-            </button>
-
-            {checkIsAdmin(user) && (
-              <button
-                type="button"
-                className="tab-btn"
-                onClick={() => setShowAdminModal(true)}
-                style={{ color: 'var(--accent-gold, #d97706)', fontWeight: 700 }}
-                title="Open Administrator Center"
-              >
-                <ShieldCheck size={18} />
-                <span>Admin</span>
-              </button>
-            )}
-          </nav>
+          {/* Continuous Premium Launch Experience Overlay */}
+          {!hasPlayedIntro && introStage !== 'complete' && (
+            <AppLaunchExperience
+              user={user}
+              summary={summary}
+              targetHeaderLogoRef={headerLogoRef}
+              attendanceTargetRef={attendanceTargetRef}
+              introStage={introStage}
+              onFinish={() => {
+                setHasPlayedIntro(true);
+                setIntroStage('complete');
+                try {
+                  sessionStorage.setItem('apy_intro_played', 'true');
+                } catch {}
+              }}
+            />
+          )}
 
           {/* Lazy-Loaded Dialogs and Modals */}
           <Suspense fallback={null}>
