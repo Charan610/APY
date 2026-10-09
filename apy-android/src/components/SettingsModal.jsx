@@ -43,6 +43,7 @@ import {
   checkForAppUpdate,
   installAppUpdate
 } from '../updateChecker';
+import BrandLogo from './BrandLogo';
 
 const GithubIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1554,21 +1555,16 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               textAlign: 'center'
             }}>
               <div style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-                border: '2px solid #d97706',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 0.65rem',
-                boxShadow: '0 4px 14px rgba(217, 119, 6, 0.25)'
+                margin: '0 auto 0.65rem'
               }}>
-                <School size={28} color="#f59e0b" />
+                <BrandLogo size={56} />
               </div>
-              <h4 className="heading-ledger" style={{ fontSize: '1.15rem', color: 'var(--ink)', margin: 0 }}>
-                APY (ATT PER Y)
+              <h4 className="heading-ledger font-serif" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>
+                <span className="brand-title-gold">ATT</span>{' '}
+                <span className="brand-title-green">PER Y</span>
               </h4>
               <div style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', fontFamily: 'var(--font-mono)', marginTop: '0.2rem' }}>
                 Installed Version <span style={{ color: 'var(--accent-gold, #d97706)', fontWeight: 700 }}>v{CURRENT_APP_VERSION}</span> · {CURRENT_APP_BUILD_DATE}
@@ -1596,10 +1592,10 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                 </span>
               </div>
               <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.75rem', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-                <li><strong>✨ Forensic Opening Animation & FLIP Motion</strong>: Smooth synchronized brand entrance and flight from vertical stack to horizontal header with zero duplicate elements.</li>
-                <li><strong>🎯 Mathematical Attendance Centering & Progress Ring</strong>: Square 180px coordinate system with perfectly centered tabular-nums digits and synchronized count-up.</li>
-                <li><strong>💓 Controlled Waveform (Heartbeat)</strong>: Gentle, restrained harmonic wave safely situated below percentage digits with dedicated SVG layer.</li>
-                <li><strong>⚡ Seamless Today Morph</strong>: Continuous animation docking directly into the Today attendance widget across all mobile and desktop viewports.</li>
+                <li><strong>✨ Calm, Sequential 4-Stage Opening Animation</strong>: Single focal point at every step, zero overlapping elements or ghost copies, and seamless 400ms cross-fade into the live dashboard.</li>
+                <li><strong>🎯 Mathematical Attendance Centering & Progress Ring</strong>: 180px square coordinate system with perfectly centered tabular-nums digits and synchronized 1.1s count-up.</li>
+                <li><strong>🏷️ Separated Attendance Metrics</strong>: Clean "Attendance" heading above the ring and "X Present / Y Absent" status below with dedicated spacing.</li>
+                <li><strong>🛡️ Authentic Brand Crest in About & Header</strong>: Real official ATT PER Y crest logo integrated across the About section, app header, and intro splash.</li>
                 <li><strong>⚡ Ultra-Fast 0-Sec Instant Startup</strong>: Eliminated cold-boot delays and network blocking gates for instant home screen load.</li>
                 <li><strong>🛡️ Resilient SWR & Offline Caching</strong>: Instant cached data rendering with background synchronization and quick request timeouts.</li>
                 <li><strong>🎯 Target Goal Calculator</strong>: Calculate consecutive periods & completion dates to hit 75%, 80%, or 85%.</li>
