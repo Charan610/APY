@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { api, getStoredUser, getAuthToken, setAuthToken, setStoredUser, checkIsAdmin } from './api';
-import { nativeStorage } from './nativeStorage';
 import Header from './components/Header';
 import AuthModal from './components/AuthModal';
 import TodayTab from './components/TodayTab';
@@ -8,15 +7,11 @@ import DashboardTab from './components/DashboardTab';
 import TimetableTab from './components/TimetableTab';
 import ForecastTab from './components/ForecastTab';
 import OfflineBanner from './components/OfflineBanner';
-import { registerServiceWorker } from './notifications';
 import LiquidNavbar from './components/LiquidNavbar';
 import AppLaunchExperience from './components/AppLaunchExperience';
+import { registerServiceWorker } from './notifications';
+import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
 import BrandLogo from './components/BrandLogo';
-import { App as CapApp } from '@capacitor/app';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { SplashScreen } from '@capacitor/splash-screen';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { LocalNotifications } from '@capacitor/local-notifications';
 
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
 const NotificationPromptModal = lazy(() => import('./components/NotificationPromptModal'));
@@ -63,83 +58,68 @@ export default function App() {
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const headerLogoRef = useRef(null);
+  const headerTitleRef = useRef(null);
   const attendanceTargetRef = useRef(null);
-  const todayAttendanceRef = attendanceTargetRef;
-  const [hasPlayedIntro, setHasPlayedIntro] = useState(false);
-  const [introStage, setIntroStage] = useState('logo-center');
-
-  // Continuous unified intro timeline
-  useEffect(() => {
-    if (!user || hasPlayedIntro) {
-      setIntroStage('complete');
-      return;
+  const [hasPlayedIntro, setHasPlayedIntro] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
     }
+  });
+  const [isHeaderBrandVisible, setIsHeaderBrandVisible] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isWidgetVisible, setIsWidgetVisible] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
+  // Respect OS reduced-motion accessibility preference
+  useEffect(() => {
     const isReduced = typeof window !== 'undefined' && 
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (isReduced) {
-      setIntroStage('complete');
       setHasPlayedIntro(true);
-      return;
+      setIsHeaderBrandVisible(true);
+      setIsWidgetVisible(true);
     }
-
-    const t1 = setTimeout(() => setIntroStage('glide-to-header'), 450);
-    const t2 = setTimeout(() => setIntroStage('attendance-large'), 1200);
-    const t3 = setTimeout(() => setIntroStage('attendance-shrink'), 2700);
-    const t4 = setTimeout(() => {
-      setIntroStage('complete');
-      setHasPlayedIntro(true);
-    }, 3500);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
-  }, [user, hasPlayedIntro]);
-
-  // 1. Initialize Capacitor native controls & persistent session
-  useEffect(() => {
-    // Immediate Splash Screen release for instant startup
-    try {
-      SplashScreen.hide();
-    } catch (e) {}
-
-    // A. Configure native status bar
-    try {
-      StatusBar.setBackgroundColor({ color: '#fbf8f1' });
-      StatusBar.setStyle({ style: Style.Dark });
-    } catch (e) {}
-
-    // B. Register service worker if available
-    registerServiceWorker();
-
-    // C. Initialize native session
-    initNativeSession();
-
-    // D. Native Hardware Back Button Handler
-    const backListener = CapApp.addListener('backButton', ({ canGoBack }) => {
-      if (showSettings) {
-        setShowSettings(false);
-      } else if (showAdminModal) {
-        setShowAdminModal(false);
-      } else if (showNotifPrompt) {
-        setShowNotifPrompt(false);
-      } else if (activeTab !== 'today') {
-        setActiveTab('today');
-      } else {
-        CapApp.exitApp();
-      }
-    });
-
-    return () => {
-      backListener.then(l => l.remove()).catch(() => {});
-    };
   }, []);
 
   useEffect(() => {
-    // Silent, non-blocking update check on launch
+    if (typeof window !== 'undefined') {
+      window.__replayIntro = () => {
+        try { sessionStorage.removeItem('apy_intro_played'); } catch {}
+        setIsHeaderBrandVisible(false);
+        setIsWidgetVisible(false);
+        setHasPlayedIntro(false);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    // 1. Initialize background service worker
+    registerServiceWorker();
+
+    // 2. Initialize user session & check notification prompt eligibility
+    initSession();
+
+    // 3. Direct URL / Query deep-linking to Admin Modal (?tab=admin or ?admin=true or #admin)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'admin' || params.get('admin') === 'true' || params.get('admin') === '1' || window.location.hash === '#admin') {
+        setShowAdminModal(true);
+      }
+    } catch {}
+
+    // 4. Silent, non-blocking update check
     checkForAppUpdate().then((res) => {
       if (res?.hasUpdate) {
         setHasUpdate(true);
@@ -147,19 +127,8 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // Report client version to backend
-    api.syncUserDevice('android', CURRENT_APP_VERSION).catch(() => {});
-
-    // Listen for notification tap on Android
-    let notifSub = null;
-    try {
-      notifSub = LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
-        const extra = action.notification?.extra;
-        if (extra?.type === 'apk_update' && extra?.url) {
-          installAppUpdate(extra.url).catch(() => {});
-        }
-      });
-    } catch (e) {}
+    // Sync device version
+    api.syncUserDevice('web', CURRENT_APP_VERSION).catch(() => {});
 
     // Listen for auth expiration events
     const handleAuthExpired = () => {
@@ -168,77 +137,117 @@ export default function App() {
       setStoredUser(null);
     };
     window.addEventListener('apy_auth_expired', handleAuthExpired);
-
-    return () => {
-      window.removeEventListener('apy_auth_expired', handleAuthExpired);
-      if (notifSub) {
-        notifSub.then(s => s?.remove?.()).catch(() => {});
-      }
-    };
+    return () => window.removeEventListener('apy_auth_expired', handleAuthExpired);
   }, []);
 
-  const triggerHaptic = async () => {
-    try {
-      await Haptics.impact({ style: ImpactStyle.Light });
-    } catch (e) {}
-  };
+  // 3. Live in-app reminder scheduler for active browser tabs & PWAs
+  useEffect(() => {
+    if (!user) return;
+    const firedMinutes = new Set();
 
-  const handleTabSwitch = (tab) => {
-    triggerHaptic();
-    setActiveTab(tab);
-  };
-
-  const initNativeSession = async () => {
-    try {
-      // 1. Read stored token & user from native storage
-      const [storedToken, storedUser] = await Promise.all([
-        nativeStorage.getToken(),
-        nativeStorage.getUser()
-      ]);
-
-      if (storedToken) {
-        setAuthToken(storedToken);
-      }
-      if (storedUser) {
-        setUser(storedUser);
-      }
-    } catch (err) {
-      // Keep existing stored user on transient read errors
-    } finally {
-      // Immediate release: never block UI on remote requests
-      setLoading(false);
+    const checkReminders = async () => {
       try {
-        await SplashScreen.hide();
-      } catch (e) {}
-    }
+        if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+          return;
+        }
 
-    // 2. Fetch fresh profile & summary asynchronously in background
-    const token = getAuthToken();
-    if (token) {
-      Promise.all([
-        api.getMe().catch(() => null),
-        api.getSummary().catch(() => null)
-      ]).then(([userData, summaryData]) => {
-        if (userData && userData.user) {
-          const u = {
-            ...userData.user,
-            is_admin: checkIsAdmin(userData.user)
-          };
-          setUser(u);
-          setStoredUser(u);
-          if (summaryData) {
-            setSummary(summaryData);
-            try {
-              localStorage.setItem('apy_summary_cache', JSON.stringify(summaryData));
-            } catch {}
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const currentTimeStr = `${hours}:${minutes}`;
+
+        if (firedMinutes.has(currentTimeStr)) return;
+
+        const config = await api.getNotificationConfig().catch(() => null);
+        if (!config || !config.enabled || !Array.isArray(config.active_times)) return;
+
+        const matchingTime = config.active_times.find(t => t.time_of_day === currentTimeStr);
+        if (matchingTime) {
+          firedMinutes.add(currentTimeStr);
+          try {
+            if ('serviceWorker' in navigator) {
+              const reg = await navigator.serviceWorker.ready;
+              reg.showNotification('Attendance Tracker ⏰', {
+                body: 'Did you attend your classes today? Tap to record your attendance.',
+                icon: '/favicon.svg',
+                badge: '/favicon.svg',
+                tag: `attendance-reminder-${currentTimeStr}`,
+                renotify: true,
+                data: { url: '/?tab=today' }
+              });
+            } else {
+              new Notification('Attendance Tracker ⏰', {
+                body: 'Did you attend your classes today? Tap to record your attendance.',
+                icon: '/favicon.svg'
+              });
+            }
+          } catch (notifErr) {
+            new Notification('Attendance Tracker ⏰', {
+              body: 'Did you attend your classes today? Tap to record your attendance.',
+              icon: '/favicon.svg'
+            });
           }
         }
-      }).catch(() => {});
+      } catch (e) {
+        // Non-blocking catch
+      }
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 10000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const checkNotificationPromptEligibility = async () => {
+    try {
+      const dismissed = localStorage.getItem('apy_notif_prompt_dismissed');
+      if (dismissed) return;
+
+      const config = await api.getNotificationConfig();
+      if (!config.has_preferences) {
+        // First-time user without reminder configuration -> show prompt
+        setShowNotifPrompt(true);
+      }
+    } catch (e) {
+      // Quietly ignore if offline or network failure
+    }
+  };
+
+  const initSession = async () => {
+    // Immediate dismissal: never block UI on remote requests
+    setLoading(false);
+
+    const token = getAuthToken();
+    if (!token) return;
+
+    try {
+      // Parallelize profile verification & summary fetching in background
+      const [userData, summaryData] = await Promise.all([
+        api.getMe().catch(() => null),
+        api.getSummary().catch(() => null)
+      ]);
+
+      if (userData && userData.user) {
+        const u = {
+          ...userData.user,
+          is_admin: checkIsAdmin(userData.user)
+        };
+        setUser(u);
+        setStoredUser(u);
+        if (summaryData) {
+          setSummary(summaryData);
+          try {
+            localStorage.setItem('apy_summary_cache', JSON.stringify(summaryData));
+          } catch {}
+        }
+        checkNotificationPromptEligibility();
+      }
+    } catch (err) {
+      // Ignore transient errors; user continues using cached credentials
     }
   };
 
   const handleAttendanceUpdated = (freshSummary) => {
-    triggerHaptic();
     if (freshSummary) {
       setSummary(freshSummary);
       try {
@@ -261,15 +270,6 @@ export default function App() {
     }
   };
 
-  const checkAndPromptNotifications = async () => {
-    try {
-      const dismissed = localStorage.getItem('apy_notif_prompt_dismissed');
-      if (!dismissed) {
-        setShowNotifPrompt(true);
-      }
-    } catch (e) {}
-  };
-
   const handleAuthSuccess = (authenticatedUser) => {
     const u = {
       ...authenticatedUser,
@@ -278,22 +278,30 @@ export default function App() {
     setUser(u);
     setStoredUser(u);
     loadSummary();
-    setTimeout(() => {
-      checkAndPromptNotifications();
-    }, 800);
+    checkNotificationPromptEligibility();
+    if (checkIsAdmin(u)) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('admin') === 'true' || params.get('tab') === 'admin' || window.location.hash === '#admin') {
+          setShowAdminModal(true);
+        }
+      } catch {}
+    }
   };
 
-  const handleLogout = async () => {
-    triggerHaptic();
+  const handleLogout = () => {
     try {
-      await api.logout();
+      api.logout();
     } catch {}
-    await nativeStorage.setToken(null);
-    await nativeStorage.setUser(null);
+    setAuthToken(null);
+    setStoredUser(null);
     setUser(null);
     setSummary(null);
+    setActiveTab('today');
+    setShowNotifPrompt(false);
     setHasPlayedIntro(false);
     setIntroStage('logo-center');
+    setIsHeaderSettled(false);
     try {
       sessionStorage.removeItem('apy_intro_played');
     } catch {}
@@ -315,152 +323,151 @@ export default function App() {
     );
   }
 
-  const isAdmin = checkIsAdmin(user);
-
   return (
-    <div className="app-viewport" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}>
+    <div className="app-viewport">
       <OfflineBanner />
       {!user ? (
         <AuthModal onAuthSuccess={handleAuthSuccess} />
       ) : (
         <>
-          <Header
-            user={user}
-            activeTab={activeTab}
-            onSelectTab={handleTabSwitch}
-            onOpenSettings={() => {
-              triggerHaptic();
-              setSettingsTab('profile');
-              setShowSettings(true);
-            }}
-            onOpenReminders={() => {
-              triggerHaptic();
-              setSettingsTab('reminders');
-              setShowSettings(true);
-            }}
-            onOpenAdmin={() => {
-              triggerHaptic();
-              setShowAdminModal(true);
-            }}
-            onLogout={handleLogout}
-            hasUpdate={hasUpdate}
-            brandLogoRef={headerLogoRef}
-            introStage={introStage}
-          />
-
-          {/* Real-time Update Notification Banner for Previous Versions */}
-          {hasUpdate && updateInfo && (
-            <aside 
-              aria-label="App update available"
-              className="update-notification-banner"
-              style={{
-                background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-                borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
-                padding: '10px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                position: 'relative',
-                zIndex: 35
+          <div className="dashboard-content-layer">
+            <Header
+              user={user}
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
+              onOpenSettings={() => {
+                setSettingsTab('profile');
+                setShowSettings(true);
               }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                <span style={{ fontSize: '20px' }}>🚀</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.2 }}>
-                    New APK Update (v{updateInfo.latestVersion || '1.4.1'})
-                  </div>
-                  <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    Tap to update and install latest enhancements
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic();
-                  if (updateInfo.apkUrl) {
-                    installAppUpdate(updateInfo.apkUrl);
-                  } else {
-                    setSettingsTab('about');
-                    setShowSettings(true);
-                  }
-                }}
+              onOpenReminders={() => {
+                setSettingsTab('reminders');
+                setShowSettings(true);
+              }}
+              onOpenAdmin={() => setShowAdminModal(true)}
+              onLogout={handleLogout}
+              hasUpdate={hasUpdate}
+              brandLogoRef={headerLogoRef}
+              brandTitleRef={headerTitleRef}
+              isBrandVisible={isHeaderBrandVisible}
+            />
+
+            {/* Real-time Update Notification Banner for Previous Versions */}
+            {hasUpdate && updateInfo && (
+              <aside 
+                aria-label="App update available"
+                className="update-notification-banner"
                 style={{
-                  background: 'linear-gradient(135deg, #d97706, #b45309)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '20px',
-                  padding: '7px 14px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
-                  flexShrink: 0
+                  background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+                  borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  position: 'relative',
+                  zIndex: 35
                 }}
               >
-                Update Now
-              </button>
-            </aside>
-          )}
-
-          <main>
-            {activeTab === 'today' && (
-              <TodayTab
-                user={user}
-                summary={summary}
-                onAttendanceUpdated={handleAttendanceUpdated}
-                introStage={introStage}
-                attendanceTargetRef={attendanceTargetRef}
-              />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <span style={{ fontSize: '20px' }}>🚀</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.2 }}>
+                      New APY Update (v{updateInfo.latestVersion || '1.4.1'})
+                    </div>
+                    <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      Tap to update and install latest enhancements
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (updateInfo.apkUrl) {
+                      installAppUpdate(updateInfo.apkUrl);
+                    } else {
+                      setSettingsTab('about');
+                      setShowSettings(true);
+                    }
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #d97706, #b45309)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '20px',
+                    padding: '7px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
+                    flexShrink: 0
+                  }}
+                >
+                  Update Now
+                </button>
+              </aside>
             )}
 
-            {activeTab === 'dashboard' && (
-              <DashboardTab
-                summary={summary}
-                user={user}
-              />
-            )}
+            <main>
+              {activeTab === 'today' && (
+                <TodayTab
+                  user={user}
+                  summary={summary}
+                  onAttendanceUpdated={handleAttendanceUpdated}
+                  attendanceTargetRef={attendanceTargetRef}
+                  isWidgetVisible={isWidgetVisible}
+                />
+              )}
 
-            {activeTab === 'timetable' && (
-              <TimetableTab
-                user={user}
-                onTimetableUpdated={loadSummary}
-              />
-            )}
+              {activeTab === 'dashboard' && (
+                <DashboardTab
+                  summary={summary}
+                  user={user}
+                />
+              )}
 
-            {activeTab === 'forecast' && (
-              <ForecastTab
-                user={user}
-              />
-            )}
-          </main>
+              {activeTab === 'timetable' && (
+                <TimetableTab
+                  user={user}
+                  onTimetableUpdated={loadSummary}
+                />
+              )}
 
-          {/* Floating Liquid-Glass Bottom Navigation Bar */}
-          <LiquidNavbar
-            activeTab={activeTab}
-            onSelectTab={handleTabSwitch}
-            isAdmin={isAdmin}
-            onOpenAdmin={() => {
-              triggerHaptic();
-              setShowAdminModal(true);
-            }}
-          />
+              {activeTab === 'forecast' && (
+                <ForecastTab
+                  user={user}
+                />
+              )}
+            </main>
 
-          {/* Continuous Premium Launch Experience Overlay */}
-          {!hasPlayedIntro && introStage !== 'complete' && (
+            {/* Floating Liquid-Glass Bottom Navigation Bar */}
+            <LiquidNavbar
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
+              isAdmin={checkIsAdmin(user)}
+              onOpenAdmin={() => setShowAdminModal(true)}
+            />
+          </div>
+
+          {/* Continuous Premium Launch Experience */}
+          {!hasPlayedIntro && (
             <AppLaunchExperience
               user={user}
               summary={summary}
-              targetHeaderLogoRef={headerLogoRef}
+              brandLogoRef={headerLogoRef}
+              brandTitleRef={headerTitleRef}
               attendanceTargetRef={attendanceTargetRef}
-              introStage={introStage}
+              onBrandLanded={() => {
+                setIsHeaderBrandVisible(true);
+              }}
+              onWidgetRevealed={() => {
+                setIsWidgetVisible(true);
+              }}
               onFinish={() => {
                 setHasPlayedIntro(true);
-                setIntroStage('complete');
+                setIsHeaderBrandVisible(true);
+                setIsWidgetVisible(true);
                 try {
                   sessionStorage.setItem('apy_intro_played', 'true');
                 } catch {}
@@ -486,21 +493,18 @@ export default function App() {
                 initialTab={settingsTab}
                 onClose={() => setShowSettings(false)}
                 user={user}
-                onOpenAdmin={() => {
-                  triggerHaptic();
-                  setShowAdminModal(true);
-                }}
+                onOpenAdmin={() => setShowAdminModal(true)}
                 onUserUpdated={(updatedUser) => {
                   if (updatedUser) {
                     setUser(updatedUser);
                     setStoredUser(updatedUser);
                   }
-                  initNativeSession();
+                  initSession();
                 }}
               />
             )}
 
-            {isAdmin && showAdminModal && (
+            {checkIsAdmin(user) && showAdminModal && (
               <AdminModal
                 isOpen={showAdminModal}
                 onClose={() => setShowAdminModal(false)}

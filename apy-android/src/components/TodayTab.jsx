@@ -21,22 +21,14 @@ import {
   ChevronRight as ChevronIcon
 } from 'lucide-react';
 
-function TodayAttendanceWidget({ overallPct, attendedCount, absentCount, introStage, targetRef }) {
+function TodayAttendanceWidget({ overallPct, attendedCount, absentCount }) {
   const compactRadius = 19;
   const compactCircumference = 2 * Math.PI * compactRadius;
   const strokeDashoffset = compactCircumference - (compactCircumference * Math.min(100, Math.max(0, overallPct))) / 100;
-  
-  // Hand-off: during intro before dock, keep opacity 0 so traveling card docks directly onto it
-  const isEarly = introStage === 'logo-center' || introStage === 'glide-to-header' || introStage === 'attendance-large';
 
   return (
     <div
-      ref={targetRef}
       className={`today-attendance-widget ${overallPct < 75 ? 'bad' : 'good'}`}
-      style={{
-        opacity: isEarly ? 0 : 1,
-        transition: 'opacity 0.4s ease'
-      }}
       title={`Overall Attendance: ${overallPct.toFixed(1)}%`}
     >
       <div className="widget-main-row">
@@ -73,7 +65,13 @@ function TodayAttendanceWidget({ overallPct, attendedCount, absentCount, introSt
   );
 }
 
-export default function TodayTab({ user, summary, onAttendanceUpdated, introStage = 'complete', attendanceTargetRef }) {
+export default function TodayTab({ 
+  user, 
+  summary, 
+  onAttendanceUpdated, 
+  isWidgetVisible = true, 
+  attendanceTargetRef 
+}) {
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [timetableByDay, setTimetableByDay] = useState(() => {
     try {
@@ -467,7 +465,7 @@ export default function TodayTab({ user, summary, onAttendanceUpdated, introStag
   }, [currentDate]);
 
   return (
-    <div style={{ opacity: (introStage === 'logo-center') ? 0 : 1, transition: 'opacity 0.5s ease' }}>
+    <div className="today-tab-content">
       {/* 1. Horizontal Week Navigator Ribbon */}
       <div className="week-navigator-ribbon" role="tablist" aria-label="Select Date">
         {getWeekDays().map((d) => (
@@ -502,13 +500,19 @@ export default function TodayTab({ user, summary, onAttendanceUpdated, introStag
 
         {/* Right side: Permanent Attendance Widget + Streak Card */}
         <div className="today-hero-right">
-          <TodayAttendanceWidget
-            overallPct={overallPct}
-            attendedCount={attendedCount}
-            absentCount={absentCount}
-            introStage={introStage}
-            targetRef={attendanceTargetRef}
-          />
+          <div 
+            ref={attendanceTargetRef} 
+            style={{ 
+              opacity: isWidgetVisible ? 1 : 0, 
+              transition: 'opacity 0.25s ease' 
+            }}
+          >
+            <TodayAttendanceWidget
+              overallPct={overallPct}
+              attendedCount={attendedCount}
+              absentCount={absentCount}
+            />
+          </div>
 
           {/* Streak Hero Card */}
           <div className="today-streak-card" title="Attendance streak of consecutive 100% days">

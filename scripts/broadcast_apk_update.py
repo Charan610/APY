@@ -66,7 +66,7 @@ def main():
         if gh_notes and not target_notes:
             target_notes = gh_notes
 
-    target_version = (target_version or "1.4.1").lstrip("v").strip()
+    target_version = (target_version or "1.4.2").lstrip("v").strip()
     target_url = target_url or f"https://github.com/Charan610/APY/releases/download/v{target_version}/APY.apk"
     target_notes = target_notes or f"APY v{target_version} update is now live. Tap to update your app!"
 

@@ -1,11 +1,6 @@
-import { registerPlugin, Capacitor } from '@capacitor/core';
-import { pushNativeUpdateNotification } from './notifications';
-
-export const CURRENT_APP_VERSION = '1.4.1';
-export const CURRENT_APP_BUILD_DATE = 'October 7, 2026';
+export const CURRENT_APP_VERSION = '1.4.2';
+export const CURRENT_APP_BUILD_DATE = 'October 9, 2026';
 export const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Charan610/APY/releases/latest';
-
-export const AppUpdate = registerPlugin('AppUpdate');
 
 /**
  * Compares two semantic version strings (e.g. "1.2.1" vs "1.2.0", "v1.2.0" vs "1.2.0").
@@ -113,8 +108,6 @@ export async function checkForAppUpdate(force = false) {
       localStorage.setItem(cacheKey, JSON.stringify({ timestamp: now, data: result }));
       if (isNewer) {
         localStorage.setItem('apy_has_update_badge', 'true');
-        // Push native Android status bar notification
-        pushNativeUpdateNotification(result).catch(() => {});
       } else {
         localStorage.removeItem('apy_has_update_badge');
       }
@@ -133,35 +126,12 @@ export async function checkForAppUpdate(force = false) {
 }
 
 /**
- * Downloads the APK and triggers Android's package installer intent via FileProvider.
+ * Downloads the APK / opens the download URL in the browser.
  */
-export async function installAppUpdate(apkUrl, onProgress) {
+export async function installAppUpdate(apkUrl) {
   if (!apkUrl) {
     throw new Error('No APK download URL provided.');
   }
-
-  const isNative = Capacitor.isNativePlatform();
-  const platform = Capacitor.getPlatform();
-
-  if (isNative && platform === 'android') {
-    let progressListener = null;
-    try {
-      if (onProgress && typeof AppUpdate.addListener === 'function') {
-        progressListener = await AppUpdate.addListener('downloadProgress', (info) => {
-          onProgress(info);
-        });
-      }
-
-      const res = await AppUpdate.downloadAndInstall({ url: apkUrl });
-      return res;
-    } finally {
-      if (progressListener && typeof progressListener.remove === 'function') {
-        progressListener.remove();
-      }
-    }
-  } else {
-    // Web / browser fallback: open download directly
-    window.open(apkUrl, '_blank');
-    return { status: 'web_opened' };
-  }
+  window.open(apkUrl, '_blank');
+  return { status: 'web_opened' };
 }

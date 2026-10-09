@@ -139,28 +139,6 @@ h1, h2, h3, h4, .heading-ledger {
   color: var(--brand-forest);
 }
 
-.brand-section.intro-center {
-  flex-direction: column;
-  gap: 1.1rem;
-}
-
-.brand-section.intro-center .brand-crest {
-  transform: scale(1.4);
-  box-shadow: 0 16px 40px rgba(22, 59, 43, 0.35);
-}
-
-.brand-section.intro-center .brand-heading {
-  transform: scale(1.15);
-  font-size: 1.55rem;
-  letter-spacing: 0.05em;
-  text-align: center;
-}
-
-.brand-section.intro-gliding .brand-crest,
-.brand-section.intro-gliding .brand-heading {
-  transform: translateY(0px) scale(1);
-  transition: transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
-}
 
 .brand-crest {
   width: 44px;
@@ -635,108 +613,6 @@ h1, h2, h3, h4, .heading-ledger {
   border-color: var(--bad-border, rgba(173, 60, 43, 0.25));
 }
 
-.today-attendance-widget.is-large {
-  width: 320px;
-  min-height: 215px;
-  padding: 1.25rem 1.4rem;
-  border-radius: 22px;
-  background: var(--surface);
-  border: 1px solid rgba(197, 160, 89, 0.35);
-  box-shadow: 0 24px 64px rgba(22, 59, 43, 0.18);
-  position: relative;
-  overflow: visible;
-}
-
-.large-hero-card-inner {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: relative;
-}
-
-.large-card-top-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  margin-bottom: 0.35rem;
-}
-
-.large-card-goal-label {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
-
-.large-card-chevron {
-  color: var(--ink-soft);
-}
-
-.large-card-content-wrap {
-  position: relative;
-  width: 100%;
-  height: 155px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.large-card-pulse-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.heartbeat-pulse-trace {
-  stroke-dasharray: 450;
-  stroke-dashoffset: 450;
-  animation: tracePulse 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-@keyframes tracePulse {
-  0% {
-    stroke-dashoffset: 450;
-  }
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-
-.heartbeat-progress-ring {
-  transition: stroke-dashoffset 0.85s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.large-card-center-stats {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.large-card-pct {
-  font-size: 3.1rem;
-  font-weight: 800;
-  color: var(--brand-forest);
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.large-card-counts {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-soft);
-  margin-top: 0.65rem;
-  letter-spacing: 0.01em;
-}
 
 .widget-main-row {
   display: flex;
@@ -2268,163 +2144,77 @@ html {
 }
 
 /* =========================================================
-   CONTINUOUS LAUNCH EXPERIENCE PORTAL (ZERO CLUTTER, ZERO COLLISION)
+   CONTINUOUS PREMIUM LAUNCH EXPERIENCE
    ========================================================= */
-.continuous-intro-portal {
+.intro-scrim-layer {
   position: fixed;
   inset: 0;
-  z-index: 9999;
-  background: var(--bg);
+  background: var(--background, #fbf8f1);
   pointer-events: none;
-  transition: background 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.continuous-intro-portal.portal-revealing {
-  background: transparent;
-}
-
-.continuous-intro-portal.portal-soft {
-  background: transparent;
-}
-
-/* 1. Flying Brand Cluster (Starts dead center, glides to header) */
-.flying-brand-cluster {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.85rem;
-  z-index: 10000;
-  transform-origin: center center;
-  will-change: transform;
-}
-
-.flying-logo-icon {
-  filter: drop-shadow(0 12px 32px rgba(22, 59, 43, 0.28));
-}
-
-.flying-logo-title {
-  font-size: 1.65rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-align: center;
-}
-
-/* 2. Flying Attendance Hero Card (Centered, spacious, no collisions) */
-.flying-attendance-card {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(340px, calc(100vw - 32px));
-  height: 205px;
-  background: var(--surface);
-  border-radius: 24px;
-  border: 1px solid rgba(197, 160, 89, 0.35);
-  box-shadow: 0 24px 64px rgba(22, 59, 43, 0.18);
-  padding: 1.15rem 1.4rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-sizing: border-box;
-  transform-origin: center center;
+.flight-logo-crest {
   will-change: transform, opacity;
-  z-index: 10000;
-  animation: cardSoftReveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-@keyframes cardSoftReveal {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -46%) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
+.flight-brand-title {
+  will-change: transform, opacity;
 }
 
-.intro-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
+.intro-attendance-hero {
+  will-change: transform, opacity;
 }
 
-.intro-card-label {
+.intro-ring-label {
   font-size: 0.92rem;
   font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.01em;
+  color: var(--brand-forest, #163b2b);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+  line-height: 1;
 }
 
-.intro-card-chevron {
-  color: var(--ink-soft);
-}
-
-.intro-card-visual-area {
+.attendance-visual {
   position: relative;
-  width: 100%;
-  height: 145px;
+  width: 180px;
+  height: 180px;
+  aspect-ratio: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.intro-card-svg {
+.attendance-percentage-layer {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  display: grid;
+  place-items: center;
   pointer-events: none;
 }
 
-.intro-pulse-trace {
-  stroke-dasharray: 450;
-  stroke-dashoffset: 450;
-  animation: tracePulseAnim 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.attendance-percentage-val {
+  font-variant-numeric: tabular-nums;
 }
 
-@keyframes tracePulseAnim {
-  0% {
-    stroke-dashoffset: 450;
-  }
-  100% {
-    stroke-dashoffset: 0;
-  }
+.heartbeat-wave-path {
+  filter: drop-shadow(0 0 1px rgba(201, 147, 59, 0.3));
 }
 
-.intro-ring-circle {
-  transition: stroke-dashoffset 0.85s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.intro-card-numbers {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.intro-big-pct {
-  font-size: 2.75rem;
-  font-weight: 800;
-  color: var(--brand-forest);
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.intro-counts-sub {
+.intro-ring-counts {
+  margin-top: 18px;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--ink-soft);
-  margin-top: 0.55rem;
-  letter-spacing: 0.01em;
+  color: var(--ink-soft, #5c584f);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1;
 }
+
+.dashboard-content-layer {
+  width: 100%;
+  min-height: 100vh;
+}
+
 

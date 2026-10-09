@@ -58,48 +58,51 @@ export default function App() {
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const headerLogoRef = useRef(null);
+  const headerTitleRef = useRef(null);
   const attendanceTargetRef = useRef(null);
-  const todayAttendanceRef = attendanceTargetRef;
-  const [hasPlayedIntro, setHasPlayedIntro] = useState(false);
-  const [introStage, setIntroStage] = useState('logo-center');
-
-  // Continuous unified intro timeline for authenticated users
-  useEffect(() => {
-    if (!user || hasPlayedIntro) {
-      setIntroStage('complete');
-      return;
+  const [hasPlayedIntro, setHasPlayedIntro] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
     }
+  });
+  const [isHeaderBrandVisible, setIsHeaderBrandVisible] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isWidgetVisible, setIsWidgetVisible] = useState(() => {
+    try {
+      return sessionStorage.getItem('apy_intro_played') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
+  // Respect OS reduced-motion accessibility preference
+  useEffect(() => {
     const isReduced = typeof window !== 'undefined' && 
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (isReduced) {
-      setIntroStage('complete');
       setHasPlayedIntro(true);
-      return;
+      setIsHeaderBrandVisible(true);
+      setIsWidgetVisible(true);
     }
+  }, []);
 
-    // Sequence:
-    // 0ms: 'logo-center' (Logo + ATT PER Y in center)
-    // 450ms: 'glide-to-header' (Logo + ATT PER Y physically glide into real header)
-    // 1200ms: 'attendance-large' (Attendance visualization appears large in center)
-    // 2700ms: 'attendance-shrink' (Large visualization smoothly shrinks into Today layout)
-    // 3500ms: 'complete' (Permanent interactive Today component)
-
-    const t1 = setTimeout(() => setIntroStage('glide-to-header'), 450);
-    const t2 = setTimeout(() => setIntroStage('attendance-large'), 1200);
-    const t3 = setTimeout(() => setIntroStage('attendance-shrink'), 2700);
-    const t4 = setTimeout(() => {
-      setIntroStage('complete');
-      setHasPlayedIntro(true);
-    }, 3500);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
-  }, [user, hasPlayedIntro]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__replayIntro = () => {
+        try { sessionStorage.removeItem('apy_intro_played'); } catch {}
+        setIsHeaderBrandVisible(false);
+        setIsWidgetVisible(false);
+        setHasPlayedIntro(false);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     // 1. Initialize background service worker
@@ -298,6 +301,7 @@ export default function App() {
     setShowNotifPrompt(false);
     setHasPlayedIntro(false);
     setIntroStage('logo-center');
+    setIsHeaderSettled(false);
     try {
       sessionStorage.removeItem('apy_intro_played');
     } catch {}
@@ -326,134 +330,144 @@ export default function App() {
         <AuthModal onAuthSuccess={handleAuthSuccess} />
       ) : (
         <>
-          <Header
-            user={user}
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            onOpenSettings={() => {
-              setSettingsTab('profile');
-              setShowSettings(true);
-            }}
-            onOpenReminders={() => {
-              setSettingsTab('reminders');
-              setShowSettings(true);
-            }}
-            onOpenAdmin={() => setShowAdminModal(true)}
-            onLogout={handleLogout}
-            hasUpdate={hasUpdate}
-            brandLogoRef={headerLogoRef}
-            introStage={introStage}
-          />
-
-          {/* Real-time Update Notification Banner for Previous Versions */}
-          {hasUpdate && updateInfo && (
-            <aside 
-              aria-label="App update available"
-              className="update-notification-banner"
-              style={{
-                background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-                borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
-                padding: '10px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                position: 'relative',
-                zIndex: 35
+          <div className="dashboard-content-layer">
+            <Header
+              user={user}
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
+              onOpenSettings={() => {
+                setSettingsTab('profile');
+                setShowSettings(true);
               }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                <span style={{ fontSize: '20px' }}>🚀</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.2 }}>
-                    New APY Update (v{updateInfo.latestVersion || '1.4.1'})
-                  </div>
-                  <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    Tap to update and install latest enhancements
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (updateInfo.apkUrl) {
-                    installAppUpdate(updateInfo.apkUrl);
-                  } else {
-                    setSettingsTab('about');
-                    setShowSettings(true);
-                  }
-                }}
+              onOpenReminders={() => {
+                setSettingsTab('reminders');
+                setShowSettings(true);
+              }}
+              onOpenAdmin={() => setShowAdminModal(true)}
+              onLogout={handleLogout}
+              hasUpdate={hasUpdate}
+              brandLogoRef={headerLogoRef}
+              brandTitleRef={headerTitleRef}
+              isBrandVisible={isHeaderBrandVisible}
+            />
+
+            {/* Real-time Update Notification Banner for Previous Versions */}
+            {hasUpdate && updateInfo && (
+              <aside 
+                aria-label="App update available"
+                className="update-notification-banner"
                 style={{
-                  background: 'linear-gradient(135deg, #d97706, #b45309)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '20px',
-                  padding: '7px 14px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
-                  flexShrink: 0
+                  background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+                  borderBottom: '1px solid rgba(245, 158, 11, 0.4)',
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  position: 'relative',
+                  zIndex: 35
                 }}
               >
-                Update Now
-              </button>
-            </aside>
-          )}
-
-          <main>
-            {activeTab === 'today' && (
-              <TodayTab
-                user={user}
-                summary={summary}
-                onAttendanceUpdated={handleAttendanceUpdated}
-                introStage={introStage}
-                attendanceTargetRef={attendanceTargetRef}
-              />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <span style={{ fontSize: '20px' }}>🚀</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.2 }}>
+                      New APY Update (v{updateInfo.latestVersion || '1.4.1'})
+                    </div>
+                    <div style={{ color: '#94a3b8', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      Tap to update and install latest enhancements
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (updateInfo.apkUrl) {
+                      installAppUpdate(updateInfo.apkUrl);
+                    } else {
+                      setSettingsTab('about');
+                      setShowSettings(true);
+                    }
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #d97706, #b45309)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '20px',
+                    padding: '7px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
+                    flexShrink: 0
+                  }}
+                >
+                  Update Now
+                </button>
+              </aside>
             )}
 
-            {activeTab === 'dashboard' && (
-              <DashboardTab
-                summary={summary}
-                user={user}
-              />
-            )}
+            <main>
+              {activeTab === 'today' && (
+                <TodayTab
+                  user={user}
+                  summary={summary}
+                  onAttendanceUpdated={handleAttendanceUpdated}
+                  attendanceTargetRef={attendanceTargetRef}
+                  isWidgetVisible={isWidgetVisible}
+                />
+              )}
 
-            {activeTab === 'timetable' && (
-              <TimetableTab
-                user={user}
-                onTimetableUpdated={loadSummary}
-              />
-            )}
+              {activeTab === 'dashboard' && (
+                <DashboardTab
+                  summary={summary}
+                  user={user}
+                />
+              )}
 
-            {activeTab === 'forecast' && (
-              <ForecastTab
-                user={user}
-              />
-            )}
-          </main>
+              {activeTab === 'timetable' && (
+                <TimetableTab
+                  user={user}
+                  onTimetableUpdated={loadSummary}
+                />
+              )}
 
-          {/* Floating Liquid-Glass Bottom Navigation Bar */}
-          <LiquidNavbar
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-            isAdmin={checkIsAdmin(user)}
-            onOpenAdmin={() => setShowAdminModal(true)}
-          />
+              {activeTab === 'forecast' && (
+                <ForecastTab
+                  user={user}
+                />
+              )}
+            </main>
 
-          {/* Continuous Premium Launch Experience Overlay */}
-          {!hasPlayedIntro && introStage !== 'complete' && (
+            {/* Floating Liquid-Glass Bottom Navigation Bar */}
+            <LiquidNavbar
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
+              isAdmin={checkIsAdmin(user)}
+              onOpenAdmin={() => setShowAdminModal(true)}
+            />
+          </div>
+
+          {/* Continuous Premium Launch Experience */}
+          {!hasPlayedIntro && (
             <AppLaunchExperience
               user={user}
               summary={summary}
-              targetHeaderLogoRef={headerLogoRef}
+              brandLogoRef={headerLogoRef}
+              brandTitleRef={headerTitleRef}
               attendanceTargetRef={attendanceTargetRef}
-              introStage={introStage}
+              onBrandLanded={() => {
+                setIsHeaderBrandVisible(true);
+              }}
+              onWidgetRevealed={() => {
+                setIsWidgetVisible(true);
+              }}
               onFinish={() => {
                 setHasPlayedIntro(true);
-                setIntroStage('complete');
+                setIsHeaderBrandVisible(true);
+                setIsWidgetVisible(true);
                 try {
                   sessionStorage.setItem('apy_intro_played', 'true');
                 } catch {}

@@ -13,11 +13,10 @@ export default function Header({
   onLogout, 
   hasUpdate = false, 
   brandLogoRef,
-  introStage = 'complete'
+  brandTitleRef,
+  isBrandVisible = true
 }) {
   const isAdmin = checkIsAdmin(user);
-  const isEarlyIntro = introStage === 'logo-center';
-  const hideDuringIntro = isEarlyIntro;
 
   return (
     <header className="ledger-header">
@@ -32,21 +31,21 @@ export default function Header({
           className="brand-crest" 
           ref={brandLogoRef} 
           title="ATT PER Y — Academic Ledger"
-          style={{
-            opacity: isEarlyIntro ? 0 : 1,
-            transition: 'opacity 0.35s ease'
+          style={{ 
+            opacity: isBrandVisible ? 1 : 0,
+            transition: 'opacity 0.2s ease'
           }}
         >
           <BrandLogo size={40} />
         </div>
         <div 
           className="brand-title-wrap"
-          style={{
-            opacity: isEarlyIntro ? 0 : 1,
-            transition: 'opacity 0.35s ease'
+          style={{ 
+            opacity: isBrandVisible ? 1 : 0,
+            transition: 'opacity 0.2s ease'
           }}
         >
-          <div className="brand-heading font-serif">
+          <div className="brand-heading font-serif" ref={brandTitleRef}>
             <span className="brand-title-gold">ATT</span> <span className="brand-title-green">PER Y</span>
           </div>
           <div className="brand-subline">
@@ -56,13 +55,7 @@ export default function Header({
       </div>
 
       {/* Desktop Navigation Links */}
-      <div 
-        className="desktop-nav-links"
-        style={{ 
-          opacity: hideDuringIntro ? 0 : 1, 
-          transition: 'opacity 0.45s ease 0.35s' 
-        }}
-      >
+      <div className="desktop-nav-links">
         <button
           type="button"
           className={`desktop-tab-btn ${activeTab === 'today' ? 'active' : ''}`}
@@ -117,13 +110,7 @@ export default function Header({
       </div>
 
       {/* Header Actions */}
-      <div 
-        className="header-actions"
-        style={{ 
-          opacity: hideDuringIntro ? 0 : 1, 
-          transition: 'opacity 0.45s ease 0.35s' 
-        }}
-      >
+      <div className="header-actions">
         {isAdmin && (
           <button
             type="button"

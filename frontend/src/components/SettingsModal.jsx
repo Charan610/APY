@@ -1578,7 +1578,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               </p>
             </div>
 
-            {/* What's New in v1.4.0 Changelog Card */}
+            {/* What's New in v1.4.2 Changelog Card */}
             <div style={{
               background: 'var(--surface-alt)',
               border: '1px solid var(--rule)',
@@ -1596,13 +1596,13 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                 </span>
               </div>
               <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.75rem', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+                <li><strong>✨ Forensic Opening Animation & FLIP Motion</strong>: Smooth synchronized brand entrance and flight from vertical stack to horizontal header with zero duplicate elements.</li>
+                <li><strong>🎯 Mathematical Attendance Centering & Progress Ring</strong>: Square 180px coordinate system with perfectly centered tabular-nums digits and synchronized count-up.</li>
+                <li><strong>💓 Controlled Waveform (Heartbeat)</strong>: Gentle, restrained harmonic wave safely situated below percentage digits with dedicated SVG layer.</li>
+                <li><strong>⚡ Seamless Today Morph</strong>: Continuous animation docking directly into the Today attendance widget across all mobile and desktop viewports.</li>
                 <li><strong>⚡ Ultra-Fast 0-Sec Instant Startup</strong>: Eliminated cold-boot delays and network blocking gates for instant home screen load.</li>
                 <li><strong>🛡️ Resilient SWR & Offline Caching</strong>: Instant cached data rendering with background synchronization and quick request timeouts.</li>
-                <li><strong>🚀 Global Latency Optimization</strong>: Low-latency Mumbai deployment and HTTP response compression.</li>
                 <li><strong>🎯 Target Goal Calculator</strong>: Calculate consecutive periods & completion dates to hit 75%, 80%, or 85%.</li>
-                <li><strong>⚡ Period Impact Preview</strong>: Real-time badges showing (+% / -%) outcome on each period block.</li>
-                <li><strong>🔥 Clean Attendance Streak</strong>: Dynamic badge celebrating consecutive 100% attendance days.</li>
-                <li><strong>📊 Official CSV Export</strong>: One-click attendance ledger download for personal or faculty submission.</li>
               </ul>
             </div>
 
