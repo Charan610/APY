@@ -298,6 +298,58 @@ async def run_viewport_check(bws, width, height, name, mobile=False):
     await session.screenshot(os.path.join(OUTPUT_DIR, f"final_{name}_{width}.png"))
     await session.send("Target.closeTarget", {"targetId": target_id})
 
+async def check_about_modal(bws):
+    print("\n--- Verifying About Modal with BrandLogo & v1.4.2 ---")
+    session, target_id = await create_session(bws, 390, 844, True)
+
+    early_script = f"""
+    try {{
+        localStorage.setItem('attendance_jwt_token', '{AUTH_DATA["token"]}');
+        localStorage.setItem('attendance_user', JSON.stringify({json.dumps(AUTH_DATA["user"])}));
+        sessionStorage.setItem('apy_intro_played', 'true');
+    }} catch(e) {{}}
+    """
+    await session.send("Page.addScriptToEvaluateOnNewDocument", {"source": early_script})
+    await session.send("Page.navigate", {"url": URL})
+    await asyncio.sleep(1.5)
+
+    # Click settings button in header
+    await session.evaluate("""
+    (() => {
+        const btn = document.querySelector('button[title="Settings & Baseline"]');
+        if (btn) btn.click();
+    })()
+    """)
+    await asyncio.sleep(0.6)
+
+    # Click About tab
+    await session.evaluate("""
+    (() => {
+        const tabs = Array.from(document.querySelectorAll('.settings-tab-btn, button'));
+        const aboutTab = tabs.find(b => b.textContent.trim().toLowerCase() === 'about');
+        if (aboutTab) aboutTab.click();
+    })()
+    """)
+    await asyncio.sleep(0.6)
+
+    res = await session.evaluate("""
+    (() => {
+        const modal = document.querySelector('.settings-modal');
+        const brandLogo = modal ? modal.querySelector('.brand-logo-svg') : null;
+        const brandTitle = modal ? modal.querySelector('.heading-ledger') : null;
+        const versionSpan = modal ? Array.from(modal.querySelectorAll('span')).find(s => s.textContent.includes('v1.4.2')) : null;
+        return {
+            hasModal: Boolean(modal),
+            hasBrandLogo: Boolean(brandLogo),
+            titleText: brandTitle ? brandTitle.textContent.trim() : null,
+            versionText: versionSpan ? versionSpan.textContent.trim() : null
+        };
+    })()
+    """)
+    print(f"  About Modal Check Result: {res}")
+    await session.screenshot(os.path.join(OUTPUT_DIR, "about_modal_v142.png"))
+    await session.send("Target.closeTarget", {"targetId": target_id})
+
 async def main():
     chrome_proc = start_chrome()
     try:
@@ -316,6 +368,9 @@ async def main():
 
         for w, h, name, mob in viewports:
             await run_viewport_check(bws, w, h, name, mob)
+
+        # 3. Check About modal with BrandLogo & v1.4.2
+        await check_about_modal(bws)
 
         await bws.close()
         print("\n=== ALL TESTS AND VIEWPORTS COMPLETED SUCCESSFULLY! ===")
