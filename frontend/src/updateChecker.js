@@ -46,50 +46,87 @@ export async function checkForAppUpdate(force = false) {
       } catch (e) {}
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    let releaseData = null;
 
-    const response = await fetch(GITHUB_RELEASES_URL, {
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
-    clearTimeout(timeoutId);
+    // 1. Try GitHub releases API first
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        // No releases published yet
-        const noRelease = {
-          hasUpdate: false,
-          currentVersion: CURRENT_APP_VERSION,
-          latestVersion: CURRENT_APP_VERSION,
-          releaseNotes: '',
-          apkUrl: null,
-          isUpToDate: true
+      const response = await fetch(GITHUB_RELEASES_URL, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const release = await response.json();
+        const latestTag = release.tag_name || release.name || '';
+        let apkUrl = null;
+        if (Array.isArray(release.assets)) {
+          const apkAsset = release.assets.find(a => a.name && a.name.toLowerCase().endsWith('.apk'));
+          if (apkAsset) {
+            apkUrl = apkAsset.browser_download_url;
+          }
+        }
+        if (!apkUrl && release.html_url) {
+          apkUrl = `${release.html_url}/download/APY.apk`;
+        }
+        releaseData = {
+          latestTag,
+          releaseName: release.name || latestTag,
+          releaseNotes: release.body || '',
+          publishedAt: release.published_at,
+          apkUrl,
+          htmlUrl: release.html_url
         };
-        return noRelease;
       }
-      throw new Error(`GitHub API returned status ${response.status}`);
+    } catch (ghErr) {
+      console.warn('GitHub update check note:', ghErr);
     }
 
-    const release = await response.json();
-    const latestTag = release.tag_name || release.name || '';
+    // 2. Fallback to backend /api/notifications/latest-apk if GitHub unreachable or rate limited
+    if (!releaseData) {
+      try {
+        const backendBase = (typeof window !== 'undefined' && window.__BACKEND_URL__) 
+          || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) 
+          || '';
+        const apiResp = await fetch(`${backendBase}/api/notifications/latest-apk`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (apiResp.ok) {
+          const bk = await apiResp.json();
+          if (bk?.version) {
+            releaseData = {
+              latestTag: `v${bk.version}`,
+              releaseName: `APY v${bk.version}`,
+              releaseNotes: bk.release_notes || '',
+              publishedAt: bk.published_at,
+              apkUrl: bk.apk_url || `https://github.com/Charan610/APY/releases/download/v${bk.version}/APY.apk`,
+              htmlUrl: `https://github.com/Charan610/APY/releases/tag/v${bk.version}`
+            };
+          }
+        }
+      } catch (bkErr) {
+        console.warn('Backend update check note:', bkErr);
+      }
+    }
+
+    if (!releaseData) {
+      return {
+        hasUpdate: false,
+        isUpToDate: true,
+        currentVersion: CURRENT_APP_VERSION,
+        latestVersion: CURRENT_APP_VERSION,
+        releaseNotes: '',
+        apkUrl: null
+      };
+    }
+
+    const latestTag = releaseData.latestTag || '';
     const isNewer = compareVersions(latestTag, CURRENT_APP_VERSION) > 0;
-
-    // Locate the APK asset in the release
-    let apkUrl = null;
-    if (Array.isArray(release.assets)) {
-      const apkAsset = release.assets.find(a => a.name && a.name.toLowerCase().endsWith('.apk'));
-      if (apkAsset) {
-        apkUrl = apkAsset.browser_download_url;
-      }
-    }
-
-    // Fallback URL if asset not directly found
-    if (!apkUrl && release.html_url) {
-      apkUrl = `${release.html_url}/download/APY.apk`;
-    }
 
     const result = {
       hasUpdate: isNewer,
@@ -97,11 +134,11 @@ export async function checkForAppUpdate(force = false) {
       currentVersion: CURRENT_APP_VERSION,
       latestVersion: latestTag.replace(/^v/i, ''),
       tag: latestTag,
-      releaseName: release.name || latestTag,
-      releaseNotes: release.body || 'New stability improvements and fixes.',
-      publishedAt: release.published_at,
-      apkUrl,
-      htmlUrl: release.html_url
+      releaseName: releaseData.releaseName,
+      releaseNotes: releaseData.releaseNotes || 'New stability improvements and fixes.',
+      publishedAt: releaseData.publishedAt,
+      apkUrl: releaseData.apkUrl,
+      htmlUrl: releaseData.htmlUrl
     };
 
     try {

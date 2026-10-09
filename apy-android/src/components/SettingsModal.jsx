@@ -1592,6 +1592,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                 </span>
               </div>
               <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.75rem', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+                <li><strong>📱 Global Mobile Layout & Fixed Bottom Navigation</strong>: Stationary bottom navigation bar on all screens, smooth independent content scrolling, zero horizontal overflow, and safe-area inset scaling.</li>
                 <li><strong>✨ Calm, Sequential 4-Stage Opening Animation</strong>: Single focal point at every step, zero overlapping elements or ghost copies, and seamless 400ms cross-fade into the live dashboard.</li>
                 <li><strong>🎯 Mathematical Attendance Centering & Progress Ring</strong>: 180px square coordinate system with perfectly centered tabular-nums digits and synchronized 1.1s count-up.</li>
                 <li><strong>🏷️ Separated Attendance Metrics</strong>: Clean "Attendance" heading above the ring and "X Present / Y Absent" status below with dedicated spacing.</li>
