@@ -67,14 +67,7 @@ export default function App() {
       return false;
     }
   });
-  const [isHeaderBrandVisible, setIsHeaderBrandVisible] = useState(() => {
-    try {
-      return sessionStorage.getItem('apy_intro_played') === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [isWidgetVisible, setIsWidgetVisible] = useState(() => {
+  const [isDashboardVisible, setIsDashboardVisible] = useState(() => {
     try {
       return sessionStorage.getItem('apy_intro_played') === 'true';
     } catch {
@@ -88,8 +81,7 @@ export default function App() {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (isReduced) {
       setHasPlayedIntro(true);
-      setIsHeaderBrandVisible(true);
-      setIsWidgetVisible(true);
+      setIsDashboardVisible(true);
     }
   }, []);
 
@@ -97,8 +89,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       window.__replayIntro = () => {
         try { sessionStorage.removeItem('apy_intro_played'); } catch {}
-        setIsHeaderBrandVisible(false);
-        setIsWidgetVisible(false);
+        setIsDashboardVisible(false);
         setHasPlayedIntro(false);
       };
     }
@@ -330,7 +321,15 @@ export default function App() {
         <AuthModal onAuthSuccess={handleAuthSuccess} />
       ) : (
         <>
-          <div className="dashboard-content-layer">
+          <div
+            className="dashboard-content-layer"
+            style={{
+              opacity: isDashboardVisible ? 1 : 0,
+              transform: isDashboardVisible ? 'translateY(0)' : 'translateY(8px)',
+              transition: 'opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+              pointerEvents: isDashboardVisible ? 'auto' : 'none'
+            }}
+          >
             <Header
               user={user}
               activeTab={activeTab}
@@ -346,9 +345,6 @@ export default function App() {
               onOpenAdmin={() => setShowAdminModal(true)}
               onLogout={handleLogout}
               hasUpdate={hasUpdate}
-              brandLogoRef={headerLogoRef}
-              brandTitleRef={headerTitleRef}
-              isBrandVisible={isHeaderBrandVisible}
             />
 
             {/* Real-time Update Notification Banner for Previous Versions */}
@@ -415,8 +411,6 @@ export default function App() {
                   user={user}
                   summary={summary}
                   onAttendanceUpdated={handleAttendanceUpdated}
-                  attendanceTargetRef={attendanceTargetRef}
-                  isWidgetVisible={isWidgetVisible}
                 />
               )}
 
@@ -450,24 +444,15 @@ export default function App() {
             />
           </div>
 
-          {/* Continuous Premium Launch Experience */}
+          {/* Calm, Sequential 4-Stage Launch Experience Overlay */}
           {!hasPlayedIntro && (
             <AppLaunchExperience
               user={user}
               summary={summary}
-              brandLogoRef={headerLogoRef}
-              brandTitleRef={headerTitleRef}
-              attendanceTargetRef={attendanceTargetRef}
-              onBrandLanded={() => {
-                setIsHeaderBrandVisible(true);
-              }}
-              onWidgetRevealed={() => {
-                setIsWidgetVisible(true);
-              }}
+              onCrossfadeStart={() => setIsDashboardVisible(true)}
               onFinish={() => {
                 setHasPlayedIntro(true);
-                setIsHeaderBrandVisible(true);
-                setIsWidgetVisible(true);
+                setIsDashboardVisible(true);
                 try {
                   sessionStorage.setItem('apy_intro_played', 'true');
                 } catch {}

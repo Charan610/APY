@@ -2144,25 +2144,31 @@ html {
 }
 
 /* =========================================================
-   CONTINUOUS PREMIUM LAUNCH EXPERIENCE
+   CALM, SEQUENTIAL 4-STAGE LAUNCH EXPERIENCE
    ========================================================= */
-.intro-scrim-layer {
+.intro-portal-viewport {
   position: fixed;
   inset: 0;
+  z-index: 99999;
   background: var(--background, #fbf8f1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
 }
 
-.flight-logo-crest {
-  will-change: transform, opacity;
+.intro-brand-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
-.flight-brand-title {
-  will-change: transform, opacity;
-}
-
-.intro-attendance-hero {
-  will-change: transform, opacity;
+.intro-attendance-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .intro-ring-label {
@@ -2191,14 +2197,6 @@ html {
   display: grid;
   place-items: center;
   pointer-events: none;
-}
-
-.attendance-percentage-val {
-  font-variant-numeric: tabular-nums;
-}
-
-.heartbeat-wave-path {
-  filter: drop-shadow(0 0 1px rgba(201, 147, 59, 0.3));
 }
 
 .intro-ring-counts {

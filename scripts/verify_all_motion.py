@@ -138,16 +138,15 @@ async def create_session(bws, width=1280, height=800, mobile=False):
 
     return session, target_id
 
-async def run_025x_inspection(bws):
+async def run_4stage_inspection(bws):
     print("\n" + "="*60)
-    print("TEST 1: 0.25x SLOW SPEED FRAME-BY-FRAME INSPECTION (1280x800)")
+    print("TEST: 4-STAGE CALM SEQUENTIAL INTRO VERIFICATION (1280x800)")
     print("="*60)
 
     session, target_id = await create_session(bws, 1280, 800, False)
 
-    # Early script injection: set speed 0.25x and seed auth
     early_script = f"""
-    window.__APY_ANIM_SPEED = 0.25;
+    window.__APY_ANIM_SPEED = 1.0;
     try {{
         localStorage.setItem('attendance_jwt_token', '{AUTH_DATA["token"]}');
         localStorage.setItem('attendance_user', JSON.stringify({json.dumps(AUTH_DATA["user"])}));
@@ -158,160 +157,109 @@ async def run_025x_inspection(bws):
     await session.send("Page.addScriptToEvaluateOnNewDocument", {"source": early_script})
     await session.send("Page.navigate", {"url": URL})
 
-    # Milestone 1: Brand composition start (t = 1.0s, elapsed ~ 250ms at 0.25x)
-    await asyncio.sleep(1.0)
-    b_start = await session.evaluate("""
+    # Stage 1: Logo & Title Centered (0.4s)
+    await asyncio.sleep(0.4)
+    s1 = await session.evaluate("""
     (() => {
-        const logo = document.querySelector('.flight-logo-crest');
-        const title = document.querySelector('.flight-brand-title');
-        if (!logo || !title) return { ok: false, error: 'Flight elements missing' };
-        const lRect = logo.getBoundingClientRect();
-        const tRect = title.getBoundingClientRect();
+        const brand = document.querySelector('.intro-brand-stage');
+        const dash = document.querySelector('.dashboard-content-layer');
+        if (!brand) return { ok: false, error: 'Brand stage missing' };
+        const bRect = brand.getBoundingClientRect();
         const winW = window.innerWidth;
         const winH = window.innerHeight;
-        const lCenterX = lRect.left + lRect.width / 2;
-        const tCenterX = tRect.left + tRect.width / 2;
+        const bCenterX = bRect.left + bRect.width / 2;
+        const bCenterY = bRect.top + bRect.height / 2;
         return {
             ok: true,
-            window: { winW, winH },
-            logo: { left: Math.round(lRect.left), top: Math.round(lRect.top), size: Math.round(lRect.width), centerX: Math.round(lCenterX) },
-            title: { left: Math.round(tRect.left), top: Math.round(tRect.top), centerX: Math.round(tCenterX) },
-            isTitleBelowLogo: tRect.top >= lRect.bottom,
-            horizontalAlignmentDelta: Math.abs(Math.round(lCenterX) - Math.round(tCenterX)),
-            isNearScreenCenter: Math.abs(Math.round(lCenterX) - Math.round(winW / 2)) < 5
+            isNearCenterX: Math.abs(bCenterX - winW / 2) < 5,
+            isNearCenterY: Math.abs(bCenterY - winH / 2) < 20,
+            dashHidden: dash ? window.getComputedStyle(dash).opacity === '0' : false
         };
     })()
     """)
-    print(f"  Milestone 1 (Brand Start): {b_start}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "01_brand_start_1280.png"))
+    print(f"  Stage 1 (Brand Entrance): {s1}")
+    await session.screenshot(os.path.join(OUTPUT_DIR, "stage1_brand_center.png"))
 
-    # Milestone 2: Brand flight midpoint (t = 4.2s, elapsed ~ 1050ms at 0.25x)
-    await asyncio.sleep(3.2)
-    b_mid = await session.evaluate("""
+    # Stage 2: Logo Drifting Up & Fading Out (1.0s)
+    await asyncio.sleep(0.6)
+    s2 = await session.evaluate("""
     (() => {
-        const logo = document.querySelector('.flight-logo-crest');
-        const title = document.querySelector('.flight-brand-title');
-        if (!logo || !title) return { ok: false };
-        const lRect = logo.getBoundingClientRect();
-        const tRect = title.getBoundingClientRect();
+        const brand = document.querySelector('.intro-brand-stage');
+        const dash = document.querySelector('.dashboard-content-layer');
         return {
-            ok: true,
-            logoPos: { left: Math.round(lRect.left), top: Math.round(lRect.top), scale: (lRect.width / 64).toFixed(3) },
-            titlePos: { left: Math.round(tRect.left), top: Math.round(tRect.top) }
+            brandStillMounted: Boolean(brand),
+            brandOpacity: brand ? parseFloat(window.getComputedStyle(brand).opacity) : 0,
+            dashHidden: dash ? window.getComputedStyle(dash).opacity === '0' : false
         };
     })()
     """)
-    print(f"  Milestone 2 (Brand Flight Midpoint): {b_mid}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "02_brand_flight_1280.png"))
+    print(f"  Stage 2 (Brand Exit): {s2}")
+    await session.screenshot(os.path.join(OUTPUT_DIR, "stage2_brand_exit.png"))
 
-    # Milestone 3: Brand arrival at header (t = 6.2s, elapsed ~ 1550ms at 0.25x)
-    await asyncio.sleep(2.0)
-    b_landed = await session.evaluate("""
+    # Stage 3: Attendance Ring & Number Counting Up (1.8s)
+    await asyncio.sleep(0.8)
+    s3 = await session.evaluate("""
     (() => {
-        const headerLogo = document.querySelector('.brand-crest');
-        const headerTitle = document.querySelector('.brand-heading');
-        const flightLogo = document.querySelector('.flight-logo-crest');
-        return {
-            headerLogoOpacity: headerLogo ? window.getComputedStyle(headerLogo).opacity : null,
-            headerTitleOpacity: headerTitle ? window.getComputedStyle(headerTitle).opacity : null,
-            flightLogoUnmounted: !flightLogo
-        };
-    })()
-    """)
-    print(f"  Milestone 3 (Header Landing): {b_landed}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "03_header_landed_1280.png"))
-
-    # Milestone 4: Attendance card entrance & activation (t = 8.5s, elapsed ~ 2125ms at 0.25x)
-    await asyncio.sleep(2.3)
-    att_act = await session.evaluate("""
-    (() => {
-        const hero = document.querySelector('.intro-attendance-hero');
+        const att = document.querySelector('.intro-attendance-stage');
         const visual = document.querySelector('.attendance-visual');
-        const pct = document.querySelector('.attendance-percentage-val');
-        const meta = document.querySelector('.attendance-metadata-row');
-        const wave = document.querySelector('.heartbeat-wave-path');
-        if (!hero || !visual || !pct) return { ok: false, error: 'Hero elements missing' };
+        const pct = document.querySelector('.attendance-percentage-layer');
+        const label = document.querySelector('.intro-ring-label');
+        const counts = document.querySelector('.intro-ring-counts');
+        const dash = document.querySelector('.dashboard-content-layer');
+        if (!att || !visual || !pct) return { ok: false };
         const vRect = visual.getBoundingClientRect();
         const pRect = pct.getBoundingClientRect();
-        const mRect = meta ? meta.getBoundingClientRect() : null;
+        const lRect = label.getBoundingClientRect();
+        const cRect = counts.getBoundingClientRect();
         return {
             ok: true,
-            visualSize: { w: Math.round(vRect.width), h: Math.round(vRect.height), aspect: Math.round(vRect.width / vRect.height) },
-            pctVal: pct.textContent.trim(),
-            isPctCenteredX: Math.abs((vRect.left + vRect.width / 2) - (pRect.left + pRect.width / 2)) < 2,
-            isPctCenteredY: Math.abs((vRect.top + vRect.height / 2) - (pRect.top + pRect.height / 2)) < 2,
-            metaIsBelowVisual: mRect ? mRect.top >= vRect.bottom : false,
-            wavePresent: Boolean(wave)
+            visualSquare: vRect.width === vRect.height,
+            isPctCentered: Math.abs((vRect.left + vRect.width/2) - (pRect.left + pRect.width/2)) < 2,
+            labelAboveRing: lRect.bottom <= vRect.top - 12,
+            countsBelowRing: cRect.top >= vRect.bottom + 12,
+            pctText: pct.textContent.trim(),
+            dashHidden: dash ? window.getComputedStyle(dash).opacity === '0' : false
         };
     })()
     """)
-    print(f"  Milestone 4 (Attendance Visual & Mathematical Centering): {att_act}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "04_attendance_act_1280.png"))
+    print(f"  Stage 3 (Ring & Synchronized Count-up): {s3}")
+    await session.screenshot(os.path.join(OUTPUT_DIR, "stage3_ring_active.png"))
 
-    # Milestone 5: Attendance settled at actual data (t = 12.6s, elapsed ~ 3150ms at 0.25x)
-    await asyncio.sleep(4.1)
-    att_settled = await session.evaluate("""
+    # Stage 3 Settled: Real Attendance Hold (2.5s)
+    await asyncio.sleep(0.7)
+    s3_settled = await session.evaluate("""
     (() => {
-        const pct = document.querySelector('.attendance-percentage-val');
-        const meta = document.querySelector('.attendance-metadata-row');
+        const pct = document.querySelector('.attendance-percentage-layer');
         return {
-            pct: pct ? pct.textContent.trim() : null,
-            meta: meta ? meta.textContent.trim() : null
+            pct: pct ? pct.textContent.trim() : null
         };
     })()
     """)
-    print(f"  Milestone 5 (Settled Real Attendance): {att_settled}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "05_attendance_settled_1280.png"))
+    print(f"  Stage 3 Settled (Steady Hold): {s3_settled}")
+    await session.screenshot(os.path.join(OUTPUT_DIR, "stage3_settled_hold.png"))
 
-    # Milestone 6: FLIP morph in motion (t = 14.2s, elapsed ~ 3550ms at 0.25x)
-    await asyncio.sleep(1.6)
-    morph_state = await session.evaluate("""
+    # Stage 4: Cross-fade & Final Settled State (3.4s)
+    await asyncio.sleep(0.9)
+    s4 = await session.evaluate("""
     (() => {
-        const hero = document.querySelector('.intro-attendance-hero');
-        const target = document.querySelector('.today-attendance-widget');
-        if (!hero || !target) return { ok: false };
-        const hRect = hero.getBoundingClientRect();
-        const tRect = target.getBoundingClientRect();
-        return {
-            ok: true,
-            heroCenter: { x: Math.round(hRect.left + hRect.width / 2), y: Math.round(hRect.top + hRect.height / 2) },
-            targetCenter: { x: Math.round(tRect.left + tRect.width / 2), y: Math.round(tRect.top + tRect.height / 2) }
-        };
-    })()
-    """)
-    print(f"  Milestone 6 (FLIP Morph in Motion): {morph_state}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "06_flip_morph_1280.png"))
-
-    # Milestone 7: Final settled state (t = 16.5s, elapsed > 4000ms at 0.25x)
-    await asyncio.sleep(2.3)
-    final_state = await session.evaluate("""
-    (() => {
+        const intro = document.querySelector('.intro-portal-viewport');
+        const dash = document.querySelector('.dashboard-content-layer');
         const allCrests = document.querySelectorAll('.brand-crest');
-        const allHeadings = document.querySelectorAll('.brand-heading');
         const allWidgets = document.querySelectorAll('.today-attendance-widget');
-        const introHero = document.querySelector('.intro-attendance-hero');
-        const flightLogo = document.querySelector('.flight-logo-crest');
-        const target = document.querySelector('.today-attendance-widget');
-        const pctElem = target ? target.querySelector('.gauge-pct-num') : null;
         return {
+            introUnmounted: !intro,
+            dashVisible: dash ? window.getComputedStyle(dash).opacity === '1' : false,
             crestsCount: allCrests.length,
-            headingsCount: allHeadings.length,
-            widgetsCount: allWidgets.length,
-            introHeroUnmounted: !introHero,
-            flightLogoUnmounted: !flightLogo,
-            widgetOpacity: target ? window.getComputedStyle(target.parentElement).opacity : null,
-            finalPct: pctElem ? pctElem.textContent.trim() : null,
-            hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth
+            widgetsCount: allWidgets.length
         };
     })()
     """)
-    print(f"  Milestone 7 (Final Settled DOM): {final_state}")
-    await session.screenshot(os.path.join(OUTPUT_DIR, "07_final_settled_1280.png"))
+    print(f"  Stage 4 (Final Settled Dashboard): {s4}")
+    await session.screenshot(os.path.join(OUTPUT_DIR, "stage4_dashboard_settled.png"))
 
-    # Close target
     await session.send("Target.closeTarget", {"targetId": target_id})
 
-async def run_viewport_test(bws, width, height, name, mobile=False):
+async def run_viewport_check(bws, width, height, name, mobile=False):
     print(f"\n--- Testing Viewport: {name} ({width}x{height}) ---")
     session, target_id = await create_session(bws, width, height, mobile)
 
@@ -327,24 +275,20 @@ async def run_viewport_test(bws, width, height, name, mobile=False):
     await session.send("Page.addScriptToEvaluateOnNewDocument", {"source": early_script})
     await session.send("Page.navigate", {"url": URL})
 
-    # Wait for full animation at 1.0x (3.8s total duration + buffer = 4.4s)
-    await asyncio.sleep(4.4)
+    # Wait for full animation (3.2s)
+    await asyncio.sleep(3.3)
 
     res = await session.evaluate("""
     (() => {
+        const intro = document.querySelector('.intro-portal-viewport');
         const allCrests = document.querySelectorAll('.brand-crest');
-        const allHeadings = document.querySelectorAll('.brand-heading');
         const allWidgets = document.querySelectorAll('.today-attendance-widget');
-        const introHero = document.querySelector('.intro-attendance-hero');
-        const flightLogo = document.querySelector('.flight-logo-crest');
         const target = document.querySelector('.today-attendance-widget');
         const pct = target ? target.querySelector('.gauge-pct-num')?.textContent.trim() : null;
         return {
+            introUnmounted: !intro,
             crests: allCrests.length,
-            headings: allHeadings.length,
             widgets: allWidgets.length,
-            introHeroUnmounted: !introHero,
-            flightLogoUnmounted: !flightLogo,
             pct: pct,
             overflowX: document.documentElement.scrollWidth > window.innerWidth
         };
@@ -360,25 +304,18 @@ async def main():
         v = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/version").read())
         bws = await websockets.connect(v["webSocketDebuggerUrl"], max_size=30*1024*1024)
 
-        # 1. Detailed 0.25x inspection
-        await run_025x_inspection(bws)
+        # 1. 4-Stage Timeline Inspection
+        await run_4stage_inspection(bws)
 
-        # 2. Viewport test suite strictly covering Phase 7 list:
-        # 320px, 360px, 390px, 430px, 768px, 1024px, 1280px, 1440px, 1920px
+        # 2. Key Viewport Checks requested (375px mobile, 1920px desktop)
         viewports = [
-            (320, 568, "mobile_320", True),
-            (360, 640, "mobile_360", True),
+            (375, 812, "mobile_375", True),
             (390, 844, "mobile_390", True),
-            (430, 932, "mobile_430", True),
-            (768, 1024, "tablet_768", False),
-            (1024, 768, "desktop_1024", False),
-            (1280, 800, "desktop_1280", False),
-            (1440, 900, "desktop_1440", False),
             (1920, 1080, "desktop_1920", False)
         ]
 
         for w, h, name, mob in viewports:
-            await run_viewport_test(bws, w, h, name, mob)
+            await run_viewport_check(bws, w, h, name, mob)
 
         await bws.close()
         print("\n=== ALL TESTS AND VIEWPORTS COMPLETED SUCCESSFULLY! ===")

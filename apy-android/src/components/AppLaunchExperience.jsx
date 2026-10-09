@@ -5,7 +5,6 @@ import BrandLogo from './BrandLogo';
  * Standard cubic-bezier solvers:
  * - easeEntrance: cubic-bezier(0.22, 1, 0.36, 1) — Apple deceleration
  * - easeExit: cubic-bezier(0.4, 0, 1, 1) — clean acceleration out
- * - easeOutCubic: 1 - Math.pow(1 - t, 3)
  */
 function createCubicBezierSolver(p1x, p1y, p2x, p2y) {
   const cx = 3 * p1x;
@@ -45,23 +44,15 @@ function createCubicBezierSolver(p1x, p1y, p2x, p2y) {
 }
 
 const easeEntrance = createCubicBezierSolver(0.22, 1, 0.36, 1);
-const easeOutCubic = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
+const easeExit = createCubicBezierSolver(0.4, 0, 1, 1);
 
 export default function AppLaunchExperience({
   user,
   summary,
-  brandLogoRef,
-  brandTitleRef,
-  attendanceTargetRef,
-  onBrandLanded,
-  onWidgetRevealed,
+  onCrossfadeStart,
   onFinish
 }) {
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [windowDimensions, setWindowDimensions] = useState({
-    w: typeof window !== 'undefined' ? window.innerWidth : 1280,
-    h: typeof window !== 'undefined' ? window.innerHeight : 800
-  });
 
   // Real attendance calculation computed BEFORE animation starts
   const overall = summary?.overall || { percentage: 0, attended: 0, total: 0 };
@@ -72,42 +63,28 @@ export default function AppLaunchExperience({
   const attendedCount = Number(overall.attended || user?.baseline_attended || 0);
   const absentCount = Math.max(0, Number(overall.total || user?.baseline_total || 0) - attendedCount);
 
-  const brandLandedTriggeredRef = useRef(false);
-  const widgetRevealedTriggeredRef = useRef(false);
-  const onBrandLandedRef = useRef(onBrandLanded);
-  onBrandLandedRef.current = onBrandLanded;
-  const onWidgetRevealedRef = useRef(onWidgetRevealed);
-  onWidgetRevealedRef.current = onWidgetRevealed;
+  const onCrossfadeStartRef = useRef(onCrossfadeStart);
+  onCrossfadeStartRef.current = onCrossfadeStart;
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
+  const crossfadeTriggeredRef = useRef(false);
 
-  // Track viewport dimensions on resize
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowDimensions({
-        w: window.innerWidth,
-        h: window.innerHeight
-      });
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Single timeline clock via requestAnimationFrame (Total duration = 3800ms)
+  // Single timeline clock via requestAnimationFrame (Total duration = 3000ms)
   useEffect(() => {
     // Respect OS reduced-motion accessibility preference
     const isReduced = typeof window !== 'undefined' && 
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (isReduced) {
-      if (onBrandLandedRef.current) onBrandLandedRef.current();
-      if (onWidgetRevealedRef.current) onWidgetRevealedRef.current();
-      if (onFinishRef.current) onFinishRef.current();
-      return;
+      if (onCrossfadeStartRef.current) onCrossfadeStartRef.current();
+      const t = setTimeout(() => {
+        if (onFinishRef.current) onFinishRef.current();
+      }, 200);
+      return () => clearTimeout(t);
     }
 
     let animId;
     let startTime = null;
-    const TOTAL_DURATION = 3800; // ms at 1.0x
+    const TOTAL_DURATION = 3000; // ms
 
     function tick(timestamp) {
       if (!startTime) startTime = timestamp;
@@ -117,23 +94,15 @@ export default function AppLaunchExperience({
       const elapsed = (timestamp - startTime) * speed;
       setElapsedMs(elapsed);
 
-      // Trigger Brand Landed at 1450ms
-      if (elapsed >= 1450 && !brandLandedTriggeredRef.current) {
-        brandLandedTriggeredRef.current = true;
-        if (onBrandLandedRef.current) onBrandLandedRef.current();
-      }
-
-      // Trigger Widget Revealed at 3650ms (during final 150ms of morph)
-      if (elapsed >= 3650 && !widgetRevealedTriggeredRef.current) {
-        widgetRevealedTriggeredRef.current = true;
-        if (onWidgetRevealedRef.current) onWidgetRevealedRef.current();
+      // Trigger Stage 4 dashboard cross-fade at 2600ms
+      if (elapsed >= 2600 && !crossfadeTriggeredRef.current) {
+        crossfadeTriggeredRef.current = true;
+        if (onCrossfadeStartRef.current) onCrossfadeStartRef.current();
       }
 
       if (elapsed < TOTAL_DURATION) {
         animId = requestAnimationFrame(tick);
       } else {
-        if (!brandLandedTriggeredRef.current && onBrandLandedRef.current) onBrandLandedRef.current();
-        if (!widgetRevealedTriggeredRef.current && onWidgetRevealedRef.current) onWidgetRevealedRef.current();
         if (onFinishRef.current) onFinishRef.current();
       }
     }
@@ -144,150 +113,61 @@ export default function AppLaunchExperience({
     };
   }, []);
 
-  const W = windowDimensions.w;
-  const H = windowDimensions.h;
+  // Timeline Segments:
+  // - Stage 1 (0 to 800ms): Logo square & "ATT PER Y" fade in at center, scale 0.92 to 1
+  // - Stage 2 (800 to 1200ms): Logo fades out and drifts up 12px. Fully gone before 1200ms
+  // - Stage 3 (1200 to 2400ms): Clean 180px attendance ring + centered digits + labels above/below
+  //   Count-up & ring draw run in sync for 1100ms (1250ms to 2350ms) using easeOutCubic
+  // - Stage 4 (2400 to 3000ms): Hold 200ms (2400-2600ms), then cross-fade out (2600-3000ms)
 
-  // =========================================================================
-  // STAGE 1 & 2: BRAND LOGO & TITLE GEOMETRY & TRANSFORMS (0 to 1450ms)
-  // =========================================================================
-  // Initial Arrangement is Vertical at Screen Center:
-  // LOGO (64x64)
-  // ATT PER Y (26px font-serif)
-  const logoStart = {
-    x: W / 2 - 32,
-    y: H / 2 - 44,
-    size: 64
-  };
-  const titleStart = {
-    x: W / 2, // centered horizontally
-    y: H / 2 + 30
-  };
+  // Stage 1 & 2: Brand Logo & Title Calculations
+  let showBrand = false;
+  let brandOpacity = 0;
+  let brandTransform = 'scale(0.92)';
 
-  // Measure Real Destination Targets from Header DOM Nodes
-  let targetLogoRect = null;
-  let targetTitleRect = null;
-  if (brandLogoRef?.current) {
-    targetLogoRect = brandLogoRef.current.getBoundingClientRect();
-  }
-  if (brandTitleRef?.current) {
-    targetTitleRect = brandTitleRef.current.getBoundingClientRect();
+  if (elapsedMs < 800) {
+    showBrand = true;
+    const t = Math.min(elapsedMs / 800, 1);
+    const eased = easeEntrance(t);
+    brandOpacity = eased;
+    brandTransform = `scale(${0.92 + 0.08 * eased})`;
+  } else if (elapsedMs >= 800 && elapsedMs < 1200) {
+    showBrand = true;
+    const t = Math.min((elapsedMs - 800) / 400, 1);
+    const eased = easeExit(t);
+    brandOpacity = Math.max(0, 1 - eased);
+    brandTransform = `translateY(${-12 * eased}px) scale(1)`;
   }
 
-  // Fallbacks if refs not mounted yet
-  const destLogo = targetLogoRect && targetLogoRect.width > 0 ? {
-    x: targetLogoRect.left,
-    y: targetLogoRect.top,
-    size: targetLogoRect.width
-  } : {
-    x: 20,
-    y: 16,
-    size: 40
-  };
+  // Stage 3: Attendance Ring & Number Calculations
+  let showAttendance = false;
+  let attendanceOpacity = 0;
+  let attendanceTransform = 'scale(1)';
 
-  const destTitle = targetTitleRect && targetTitleRect.width > 0 ? {
-    x: targetTitleRect.left,
-    y: targetTitleRect.top,
-    w: targetTitleRect.width,
-    h: targetTitleRect.height
-  } : {
-    x: destLogo.x + destLogo.size + 12,
-    y: destLogo.y + 8,
-    w: 120,
-    h: 24
-  };
-
-  const showBrandFlight = elapsedMs < 1450;
-  let logoStyle = {};
-  let titleStyle = {};
-
-  if (showBrandFlight) {
-    if (elapsedMs < 700) {
-      // Stage 1 (0 to 700ms): Centered Entrance Fade & Scale
-      const p = Math.min(elapsedMs / 700, 1);
-      const eased = easeEntrance(p);
-      const scale = 0.88 + 0.12 * eased;
-      const opacity = eased;
-
-      logoStyle = {
-        position: 'fixed',
-        left: `${logoStart.x}px`,
-        top: `${logoStart.y}px`,
-        width: `${logoStart.size}px`,
-        height: `${logoStart.size}px`,
-        transform: `scale(${scale})`,
-        opacity: opacity,
-        transformOrigin: 'center center',
-        zIndex: 100000,
-        pointerEvents: 'none'
-      };
-
-      titleStyle = {
-        position: 'fixed',
-        left: `${titleStart.x}px`,
-        top: `${titleStart.y}px`,
-        transform: `translate(-50%, 0) scale(${scale})`,
-        opacity: opacity,
-        transformOrigin: 'center center',
-        zIndex: 100000,
-        pointerEvents: 'none'
-      };
+  if (elapsedMs >= 1200) {
+    showAttendance = true;
+    if (elapsedMs < 1400) {
+      // Entrance fade-in: 1200 to 1400ms
+      const t = Math.min((elapsedMs - 1200) / 200, 1);
+      const eased = easeEntrance(t);
+      attendanceOpacity = eased;
+      attendanceTransform = `scale(${0.96 + 0.04 * eased})`;
     } else {
-      // Stage 2 (700 to 1450ms): FLIP Transition to Header
-      const p = Math.min((elapsedMs - 700) / 750, 1);
-      const eased = easeEntrance(p);
-
-      // Logo glides to destLogo
-      const curLogoX = logoStart.x + (destLogo.x - logoStart.x) * eased;
-      const curLogoY = logoStart.y + (destLogo.y - logoStart.y) * eased;
-      const logoScale = 1.0 + ((destLogo.size / logoStart.size) - 1.0) * eased;
-
-      logoStyle = {
-        position: 'fixed',
-        left: `${curLogoX}px`,
-        top: `${curLogoY}px`,
-        width: `${logoStart.size}px`,
-        height: `${logoStart.size}px`,
-        transform: `scale(${logoScale})`,
-        transformOrigin: 'top left',
-        opacity: 1,
-        zIndex: 100000,
-        pointerEvents: 'none'
-      };
-
-      // Title glides from below logo to beside logo in header
-      // Starting: center is titleStart.x, top is titleStart.y
-      // Destination: left is destTitle.x, top is destTitle.y
-      const curTitleLeft = (titleStart.x - 60) + (destTitle.x - (titleStart.x - 60)) * eased;
-      const curTitleTop = titleStart.y + (destTitle.y - titleStart.y) * eased;
-      const titleScale = 1.0 + ((Math.max(18, destTitle.h) / 26) - 1.0) * eased;
-
-      titleStyle = {
-        position: 'fixed',
-        left: `${curTitleLeft}px`,
-        top: `${curTitleTop}px`,
-        transform: `scale(${titleScale})`,
-        transformOrigin: 'top left',
-        opacity: 1,
-        zIndex: 100000,
-        pointerEvents: 'none'
-      };
+      attendanceOpacity = 1;
+      attendanceTransform = 'scale(1)';
     }
   }
 
-  // =========================================================================
-  // STAGE 3, 4, 5, 6: ATTENDANCE HERO & FLIP MORPH TO WIDGET (1450 to 3800ms)
-  // =========================================================================
-  const showAttendanceHero = elapsedMs >= 1450 && elapsedMs < 3800;
-
-  // Real Attendance Calculation
+  // Synchronized count-up & ring stroke draw: 1250ms to 2350ms (exact 1100ms)
   let countProgress = 0;
-  if (elapsedMs >= 1950) {
-    const rawT = Math.min((elapsedMs - 1950) / 1100, 1);
-    countProgress = easeOutCubic(rawT);
+  if (elapsedMs >= 1250) {
+    const rawT = Math.min((elapsedMs - 1250) / 1100, 1);
+    // Shared easeOutCubic curve so ring and number stop at the exact same instant
+    countProgress = 1 - Math.pow(1 - rawT, 3);
   }
   const currentPct = targetPct * countProgress;
 
-  // 180px Square Coordinate System
+  // Ring Geometry: 180px square coordinate system
   const ringSize = 180;
   const strokeWidth = 5.5;
   const radius = 72; // Diameter 144px -> generous 34px radial clearance to digits
@@ -295,137 +175,73 @@ export default function AppLaunchExperience({
   const strokeDashoffset = circumference - (circumference * Math.min(100, Math.max(0, currentPct))) / 100;
   const ringColor = targetPct >= 75 ? '#255d44' : '#b91c1c';
 
-  // Measure Real TodayAttendanceWidget Target
-  let targetWidgetRect = null;
-  if (attendanceTargetRef?.current) {
-    targetWidgetRect = attendanceTargetRef.current.getBoundingClientRect();
-  }
-
-  const destWidget = targetWidgetRect && targetWidgetRect.width > 0 ? {
-    cx: targetWidgetRect.left + targetWidgetRect.width / 2,
-    cy: targetWidgetRect.top + targetWidgetRect.height / 2,
-    w: targetWidgetRect.width,
-    h: targetWidgetRect.height
-  } : {
-    cx: W - 100,
-    cy: 80,
-    w: 120,
-    h: 52
-  };
-
-  let heroContainerStyle = {};
-  if (showAttendanceHero) {
-    if (elapsedMs < 1950) {
-      // Entrance Fade & Scale: 1450 to 1950ms
-      const p = Math.min((elapsedMs - 1450) / 500, 1);
-      const eased = easeEntrance(p);
-      heroContainerStyle = {
-        position: 'fixed',
-        left: `${W / 2}px`,
-        top: `${H / 2}px`,
-        transform: `translate(-50%, -50%) scale(${0.94 + 0.06 * eased})`,
-        opacity: eased,
-        zIndex: 99998,
-        pointerEvents: 'none'
-      };
-    } else if (elapsedMs < 3250) {
-      // Steady Hero Active & Settled Hold: 1950 to 3250ms
-      heroContainerStyle = {
-        position: 'fixed',
-        left: `${W / 2}px`,
-        top: `${H / 2}px`,
-        transform: 'translate(-50%, -50%) scale(1)',
-        opacity: 1,
-        zIndex: 99998,
-        pointerEvents: 'none'
-      };
-    } else {
-      // Stage 6 (3250 to 3800ms): FLIP Morph to TodayAttendanceWidget
-      const p = Math.min((elapsedMs - 3250) / 550, 1);
-      const eased = easeEntrance(p);
-
-      const startCx = W / 2;
-      const startCy = H / 2;
-      const curCx = startCx + (destWidget.cx - startCx) * eased;
-      const curCy = startCy + (destWidget.cy - startCy) * eased;
-
-      // Scale down to match widget height (52px vs 260px total card height => ~0.25 - 0.35)
-      const targetScale = Math.min(0.42, Math.max(0.24, destWidget.h / 240));
-      const curScale = 1.0 + (targetScale - 1.0) * eased;
-
-      // Smoothly fade out during last 150ms of morph (from p ~ 0.72 to 1.0)
-      const fadeOutOpacity = p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1;
-
-      heroContainerStyle = {
-        position: 'fixed',
-        left: `${curCx}px`,
-        top: `${curCy}px`,
-        transform: `translate(-50%, -50%) scale(${curScale})`,
-        opacity: fadeOutOpacity,
-        zIndex: 99998,
-        pointerEvents: 'none'
-      };
-    }
-  }
-
-  // Scrim Background Opacity: Opaque 0 to 1450ms, then fades out revealing Today page
-  let scrimOpacity = 1;
-  if (elapsedMs >= 1450) {
-    const p = Math.min((elapsedMs - 1450) / 400, 1);
-    scrimOpacity = Math.max(0, 1 - p);
+  // Stage 4 Cross-fade: 2600ms to 3000ms
+  let overlayOpacity = 1;
+  if (elapsedMs >= 2600) {
+    const t = Math.min((elapsedMs - 2600) / 400, 1);
+    overlayOpacity = Math.max(0, 1 - t);
   }
 
   return (
-    <>
-      {/* Background Portal Scrim (Covers dashboard initially, then reveals it smoothly) */}
-      {scrimOpacity > 0 && (
+    <div
+      className="intro-portal-viewport"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        background: '#fbf8f1',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        opacity: overlayOpacity,
+        willChange: overlayOpacity < 1 ? 'opacity' : 'auto'
+      }}
+    >
+      {/* STAGE 1 & 2: Centered Brand Crest & Title (Never flies) */}
+      {showBrand && (
         <div
-          className="intro-scrim-layer"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'var(--background, #fbf8f1)',
-            opacity: scrimOpacity,
-            zIndex: 99990,
-            pointerEvents: 'none'
-          }}
-        />
-      )}
-
-      {/* FLYING BRAND CREST (Single Visible Logo during Intro) */}
-      {showBrandFlight && (
-        <div className="flight-logo-crest" style={logoStyle}>
-          <BrandLogo size={logoStart.size} />
-        </div>
-      )}
-
-      {/* FLYING BRAND WORDMARK (Glides from Vertical Stack to Horizontal Beside Logo) */}
-      {showBrandFlight && (
-        <div
-          className="flight-brand-title font-serif"
-          style={{
-            ...titleStyle,
-            fontSize: '26px',
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <span className="brand-title-gold">ATT</span>{' '}
-          <span className="brand-title-green">PER Y</span>
-        </div>
-      )}
-
-      {/* HERO ATTENDANCE VISUALIZATION (Square Coordinate System, Centered Digits, Heartbeat) */}
-      {showAttendanceHero && (
-        <div
-          className="intro-attendance-hero"
+          className="intro-brand-stage"
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            ...heroContainerStyle
+            opacity: brandOpacity,
+            transform: brandTransform,
+            willChange: 'transform, opacity'
+          }}
+        >
+          <div className="brand-crest" style={{ marginBottom: '14px' }}>
+            <BrandLogo size={64} />
+          </div>
+          <div
+            className="brand-heading font-serif"
+            style={{
+              fontSize: '26px',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <span className="brand-title-gold">ATT</span>{' '}
+            <span className="brand-title-green">PER Y</span>
+          </div>
+        </div>
+      )}
+
+      {/* STAGE 3: Centered Attendance Ring (Label above, digits inside, counts below) */}
+      {showAttendance && (
+        <div
+          className="intro-attendance-stage"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: attendanceOpacity,
+            transform: attendanceTransform,
+            willChange: 'transform, opacity'
           }}
         >
           {/* Label strictly ABOVE the ring with >= 16px spacing */}
@@ -435,10 +251,9 @@ export default function AppLaunchExperience({
               fontSize: '0.92rem',
               fontWeight: 700,
               color: '#163b2b',
-              letterSpacing: '0.05em',
+              letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              marginBottom: '18px',
-              lineHeight: 1
+              marginBottom: '18px'
             }}
           >
             Attendance
@@ -457,7 +272,7 @@ export default function AppLaunchExperience({
               justifyContent: 'center'
             }}
           >
-            {/* SVG Ring & Heartbeat Wave Layer */}
+            {/* SVG Ring Layer */}
             <svg
               width={ringSize}
               height={ringSize}
@@ -474,7 +289,7 @@ export default function AppLaunchExperience({
                 fill="none"
               />
 
-              {/* Dynamic progress fill: draws 0 to real percentage in sync with digits */}
+              {/* Dynamic progress fill: draws 0 to real percentage */}
               <circle
                 cx={ringSize / 2}
                 cy={ringSize / 2}
@@ -487,23 +302,9 @@ export default function AppLaunchExperience({
                 transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
                 fill="none"
               />
-
-              {/* Dedicated Controlled Heartbeat Wave (Lower interior, never crosses digits) */}
-              <path
-                className="heartbeat-wave-path"
-                d="M 52 130 C 66 126, 76 134, 90 128 C 104 122, 114 134, 128 130"
-                stroke="rgba(197, 160, 89, 0.7)"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                fill="none"
-                style={{
-                  opacity: countProgress > 0 ? 0.8 : 0,
-                  transition: 'opacity 0.3s ease'
-                }}
-              />
             </svg>
 
-            {/* Mathematically Centered Percentage Digits (Exact square center) */}
+            {/* Mathematically centered percentage digits (no stroke contact) */}
             <div
               className="attendance-percentage-layer"
               style={{
@@ -515,7 +316,7 @@ export default function AppLaunchExperience({
               }}
             >
               <span
-                className="font-serif attendance-percentage-val"
+                className="font-serif"
                 style={{
                   fontSize: '2.5rem',
                   fontWeight: 800,
@@ -532,15 +333,14 @@ export default function AppLaunchExperience({
 
           {/* Metadata strictly BELOW the ring with >= 16px spacing */}
           <div
-            className="intro-ring-counts font-mono attendance-metadata-row"
+            className="intro-ring-counts font-mono"
             style={{
               marginTop: '18px',
               fontSize: '0.85rem',
               fontWeight: 600,
               color: '#5c584f',
               letterSpacing: '0.02em',
-              whiteSpace: 'nowrap',
-              lineHeight: 1
+              whiteSpace: 'nowrap'
             }}
           >
             <span style={{ color: '#255d44', fontWeight: 700 }}>{attendedCount} Present</span>
@@ -549,6 +349,6 @@ export default function AppLaunchExperience({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
