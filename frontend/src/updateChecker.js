@@ -40,7 +40,7 @@ export async function checkForAppUpdate(force = false) {
     if (!force && cached) {
       try {
         const parsed = JSON.parse(cached);
-        if (now - parsed.timestamp < 5 * 60 * 1000 && parsed.data) {
+        if (now - parsed.timestamp < 5 * 60 * 1000 && parsed.data && parsed.data.currentVersion === CURRENT_APP_VERSION) {
           return parsed.data;
         }
       } catch (e) {}

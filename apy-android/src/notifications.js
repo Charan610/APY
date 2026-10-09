@@ -32,6 +32,16 @@ export async function registerServiceWorker() {
   }
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    if (registration) {
+      registration.update();
+    }
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
     await navigator.serviceWorker.ready;
     return registration;
   } catch (error) {
