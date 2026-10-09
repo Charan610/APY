@@ -59,15 +59,20 @@
 }
 
 html, body {
-  overflow-x: hidden;
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   max-width: 100vw;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   background-color: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
-  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
@@ -75,6 +80,16 @@ body {
     radial-gradient(ellipse at top left, rgba(201, 147, 59, 0.03) 0%, transparent 60%),
     radial-gradient(ellipse at bottom right, rgba(22, 59, 43, 0.03) 0%, transparent 60%);
   background-attachment: fixed;
+}
+
+#root {
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
 }
 
 /* Typography Helpers */
@@ -95,33 +110,73 @@ h1, h2, h3, h4, .heading-ledger {
   letter-spacing: -0.015em;
 }
 
-/* Mobile-First Centered Container (Adapts seamlessly from 520px mobile to 880px PC) */
+/* Mobile-First Centered Container Shell (Full height flex column) */
 .app-viewport {
   width: 100%;
   max-width: 520px;
   margin: 0 auto;
-  min-height: 100vh;
-  padding: 1rem 1rem 6.5rem 1rem;
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
   border-left: 1px solid var(--rule);
   border-right: 1px solid var(--rule);
   background-color: var(--bg);
-  transition: max-width 0.2s ease, padding 0.2s ease;
+  box-sizing: border-box;
+}
+
+/* Dashboard content layer fills the app shell */
+.dashboard-content-layer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* =========================================================
-   TOP APP HEADER
+   TOP APP HEADER (Stationary at Top with Safe Area Inset)
    ========================================================= */
 .ledger-header {
+  flex-shrink: 0;
   position: relative;
-  z-index: 2100;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 0.95rem;
-  margin-bottom: 1.25rem;
+  padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 1rem 0.75rem 1rem;
+  margin-bottom: 0;
   border-bottom: 1px solid var(--rule);
+  background-color: var(--bg);
+  box-sizing: border-box;
+}
+
+/* Update Notification Banner - Stationary beneath header */
+.update-notification-banner {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   INDEPENDENT SCROLLABLE MAIN CONTENT AREA
+   ========================================================= */
+.app-main-content, main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding: 1rem 1rem calc(6rem + env(safe-area-inset-bottom, 0px)) 1rem;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .brand-section {
@@ -260,10 +315,10 @@ h1, h2, h3, h4, .heading-ledger {
   transform: translateX(-50%);
   width: calc(100% - 1.75rem);
   max-width: 490px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(229, 222, 208, 0.9);
+  border: 1px solid rgba(229, 222, 208, 0.95);
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-floating);
   display: flex;
@@ -271,6 +326,14 @@ h1, h2, h3, h4, .heading-ledger {
   padding: 0.35rem 0.4rem;
   z-index: 950;
   user-select: none;
+  box-sizing: border-box;
+}
+
+@media (max-height: 480px) {
+  /* Hide floating bottom nav when soft keyboard opens to prevent covering input fields */
+  .liquid-nav-container {
+    display: none;
+  }
 }
 
 .liquid-nav-track {
@@ -423,6 +486,8 @@ h1, h2, h3, h4, .heading-ledger {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   padding: 0.25rem 0 0.85rem;
   margin-bottom: 0.85rem;
   scrollbar-width: none;
@@ -1315,15 +1380,15 @@ h1, h2, h3, h4, .heading-ledger {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
   background: rgba(24, 34, 29, 0.45);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  z-index: 1000;
+  padding: calc(1rem + env(safe-area-inset-top, 0px)) 1rem calc(1rem + env(safe-area-inset-bottom, 0px)) 1rem;
+  z-index: 2000;
+  box-sizing: border-box;
 }
 
 .modal-dialog {
@@ -1332,10 +1397,13 @@ h1, h2, h3, h4, .heading-ledger {
   border-radius: var(--radius-xl);
   max-width: 520px;
   width: 100%;
-  max-height: 90vh;
+  max-height: min(90dvh, 90vh);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   box-shadow: 0 20px 48px rgba(24, 34, 29, 0.22);
   padding: 1.5rem;
+  box-sizing: border-box;
 }
 
 /* =========================================================
@@ -1383,6 +1451,8 @@ h1, h2, h3, h4, .heading-ledger {
   display: flex;
   gap: 0.45rem;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   padding-bottom: 0.65rem;
   margin-bottom: 0.85rem;
   scrollbar-width: none;
@@ -1800,10 +1870,13 @@ h1, h2, h3, h4, .heading-ledger {
 @media (min-width: 768px) {
   .app-viewport {
     max-width: 860px;
-    padding: 1.75rem 2rem 3rem 2rem;
     border-left: 2px solid var(--rule);
     border-right: 2px solid var(--rule);
     box-shadow: 0 4px 24px rgba(24, 34, 29, 0.05);
+  }
+
+  .app-main-content, main {
+    padding: 1.5rem 2rem 3rem 2rem;
   }
 
   .desktop-nav-links {
@@ -2210,9 +2283,5 @@ html {
   line-height: 1;
 }
 
-.dashboard-content-layer {
-  width: 100%;
-  min-height: 100vh;
-}
 
 

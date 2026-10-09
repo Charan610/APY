@@ -325,8 +325,7 @@ export default function App() {
             className="dashboard-content-layer"
             style={{
               opacity: isDashboardVisible ? 1 : 0,
-              transform: isDashboardVisible ? 'translateY(0)' : 'translateY(8px)',
-              transition: 'opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1), transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+              transition: 'opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
               pointerEvents: isDashboardVisible ? 'auto' : 'none'
             }}
           >
@@ -405,7 +404,7 @@ export default function App() {
               </aside>
             )}
 
-            <main>
+            <main className="app-main-content">
               {activeTab === 'today' && (
                 <TodayTab
                   user={user}
