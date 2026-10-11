@@ -2,37 +2,37 @@
   /* =========================================================
      ACADEMIC LEDGER & LIQUID GLASS DESIGN TOKENS
      ========================================================= */
-  --bg: #FAF8F2;
-  --bg-parchment: #F6F3EB;
+  --bg: #F6F7F2;
+  --bg-parchment: #F0F2EA;
   --surface: #FFFFFF;
-  --surface-alt: #F3EFE6;
-  --surface-soft: #F8F6F0;
+  --surface-alt: #ECF1EC;
+  --surface-soft: #FAFBF8;
   
-  --ink: #18221D;
-  --ink-soft: #5C6960;
-  --ink-muted: #8A968E;
+  --ink: #172722;
+  --ink-soft: #52645D;
+  --ink-muted: #82918A;
   
-  --brand-forest: #163B2B;
-  --brand-forest-dark: #0F281D;
-  --brand-forest-light: #204E3A;
-  --brand-forest-soft: rgba(22, 59, 43, 0.08);
+  --brand-forest: #174C45;
+  --brand-forest-dark: #103933;
+  --brand-forest-light: #246158;
+  --brand-forest-soft: rgba(23, 76, 69, 0.08);
   
-  --accent-gold: #C9933B;
-  --accent-gold-dark: #AC7A28;
-  --accent-gold-soft: rgba(201, 147, 59, 0.12);
-  --accent-gold-border: rgba(201, 147, 59, 0.35);
+  --accent-gold: #BC8D4B;
+  --accent-gold-dark: #966D37;
+  --accent-gold-soft: rgba(188, 141, 75, 0.12);
+  --accent-gold-border: rgba(188, 141, 75, 0.34);
   
-  --good: #216E4E;
-  --good-soft: rgba(33, 110, 78, 0.10);
-  --good-border: rgba(33, 110, 78, 0.25);
+  --good: #237459;
+  --good-soft: rgba(35, 116, 89, 0.10);
+  --good-border: rgba(35, 116, 89, 0.25);
   
-  --bad: #AD3C2B;
-  --bad-soft: rgba(173, 60, 43, 0.10);
-  --bad-border: rgba(173, 60, 43, 0.25);
+  --bad: #B5483A;
+  --bad-soft: rgba(181, 72, 58, 0.10);
+  --bad-border: rgba(181, 72, 58, 0.25);
   
-  --rule: #E5DED0;
-  --rule-soft: #EDE8DE;
-  --rule-strong: #D5CCBC;
+  --rule: #DEE6DF;
+  --rule-soft: #E8EEE8;
+  --rule-strong: #C8D5CC;
   
   --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-mono: 'IBM Plex Mono', monospace;
@@ -46,10 +46,10 @@
   --radius-full: 9999px;
   
   --shadow-subtle: 0 1px 3px rgba(24, 34, 29, 0.04), 0 1px 2px rgba(24, 34, 29, 0.02);
-  --shadow-card: 0 2px 10px rgba(24, 34, 29, 0.04), 0 1px 2px rgba(24, 34, 29, 0.02);
-  --shadow-elevated: 0 8px 24px rgba(24, 34, 29, 0.07), 0 2px 6px rgba(24, 34, 29, 0.04);
-  --shadow-floating: 0 12px 36px rgba(22, 59, 43, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-bubble: 0 4px 14px rgba(22, 59, 43, 0.32);
+  --shadow-card: 0 2px 10px rgba(23, 39, 34, 0.045), 0 1px 2px rgba(23, 39, 34, 0.025);
+  --shadow-elevated: 0 8px 24px rgba(23, 39, 34, 0.075), 0 2px 6px rgba(23, 39, 34, 0.04);
+  --shadow-floating: 0 12px 36px rgba(23, 76, 69, 0.14), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-bubble: 0 4px 14px rgba(23, 76, 69, 0.3);
 }
 
 * {
@@ -1799,11 +1799,11 @@ h1, h2, h3, h4, .heading-ledger {
    ========================================================= */
 @media (min-width: 768px) {
   .app-viewport {
-    max-width: 860px;
-    padding: 1.75rem 2rem 3rem 2rem;
-    border-left: 2px solid var(--rule);
-    border-right: 2px solid var(--rule);
-    box-shadow: 0 4px 24px rgba(24, 34, 29, 0.05);
+    max-width: 1120px;
+    padding: 2rem 2.5rem 4rem;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: none;
   }
 
   .desktop-nav-links {
@@ -2213,6 +2213,379 @@ html {
 .dashboard-content-layer {
   width: 100%;
   min-height: 100vh;
+}
+
+/* =========================================================
+   REFINED CAMPUS PALETTE & UI MOTION
+   ========================================================= */
+.modal-backdrop {
+  background:
+    radial-gradient(ellipse at 50% 22%, rgba(188, 141, 75, 0.11), transparent 52%),
+    rgba(16, 57, 51, 0.38);
+  animation: auth-backdrop-in 420ms ease-out both;
+}
+
+.modal-dialog {
+  border-color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 24px 64px rgba(16, 57, 51, 0.2), 0 3px 12px rgba(16, 57, 51, 0.08);
+  animation: auth-panel-in 560ms cubic-bezier(0.18, 1, 0.3, 1) both;
+}
+
+.btn {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.btn-primary {
+  box-shadow: 0 3px 9px rgba(23, 76, 69, 0.18);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(23, 76, 69, 0.22);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.form-control,
+.input-text {
+  transition: border-color 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
+}
+
+.form-control:focus,
+.input-text:focus {
+  border-color: var(--brand-forest-light);
+  box-shadow: 0 0 0 3px rgba(36, 97, 88, 0.12);
+}
+
+.dashboard-content-layer main > * {
+  animation: view-settle-in 420ms cubic-bezier(0.18, 1, 0.3, 1) both;
+}
+
+.launch-experience-portal,
+.intro-scrim-layer {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 50% 40%, rgba(188, 141, 75, 0.1), transparent 48%),
+    radial-gradient(ellipse at 50% 100%, rgba(23, 76, 69, 0.055), transparent 58%);
+}
+
+@keyframes auth-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes auth-panel-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes view-settle-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-dialog,
+  .dashboard-content-layer main > * {
+    animation-duration: 1ms !important;
+  }
+
+  .btn,
+  .form-control,
+  .input-text {
+    transition-duration: 1ms !important;
+  }
+}
+
+.attendance-ring-progress {
+  filter: drop-shadow(0 0 7px rgba(35, 116, 89, 0.24));
+  transition: stroke 280ms ease;
+}
+
+.ledger-card,
+.today-hero-banner,
+.subject-item-card,
+.forecast-day-card,
+.today-streak-card {
+  transition:
+    border-color 220ms ease,
+    box-shadow 260ms ease,
+    transform 260ms cubic-bezier(0.18, 1, 0.3, 1),
+    background-color 220ms ease;
+}
+
+.desktop-nav-links {
+  background: rgba(236, 241, 236, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.desktop-tab-btn {
+  transition: color 200ms ease, background-color 200ms ease, box-shadow 220ms ease, transform 220ms ease;
+}
+
+.desktop-tab-btn.active {
+  background: linear-gradient(135deg, var(--brand-forest-light), var(--brand-forest-dark));
+  box-shadow: 0 3px 9px rgba(16, 57, 51, 0.22);
+}
+
+.today-hero-banner {
+  background: linear-gradient(120deg, var(--surface) 68%, var(--surface-alt));
+  box-shadow: var(--shadow-card);
+}
+
+.today-attendance-widget {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.gauge-fill {
+  transition: stroke-dashoffset 620ms cubic-bezier(0.18, 1, 0.3, 1);
+}
+
+.gauge-pct-num {
+  display: inline-block;
+  transform-origin: center;
+}
+
+.quick-action-card,
+.ribbon-day-cell,
+.scenario-card,
+.subject-select-pill {
+  transition-duration: 220ms;
+}
+
+.forecast-day-card:hover,
+.ledger-card:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-elevated);
+}
+
+.subject-item-card:hover {
+  transform: translateY(-1px);
+}
+
+@media (min-width: 900px) {
+  .app-viewport {
+    padding-inline: 3rem;
+  }
+
+  .ledger-card {
+    padding: 1.5rem;
+  }
+
+  .today-hero-banner {
+    padding: 1.5rem 1.75rem;
+  }
+
+  .subject-pc-grid,
+  .forecast-pc-grid {
+    gap: 1rem;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ledger-card:hover,
+  .forecast-day-card:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.heartbeat-wave-path {
+  stroke-dasharray: 64 250;
+  animation: intro-heartbeat-flow 900ms linear infinite;
+  filter: drop-shadow(0 0 4px rgba(188, 141, 75, 0.4));
+}
+
+.attendance-percentage-val {
+  display: inline-block;
+  transform-origin: center;
+  text-shadow: 0 2px 14px color-mix(in srgb, currentColor 18%, transparent);
+  will-change: transform;
+}
+
+.attendance-percentage-val.is-heartbeating {
+  animation: attendance-heartbeat 1.2s ease-in-out infinite;
+}
+
+@keyframes attendance-heartbeat {
+  0%, 40%, 100% {
+    transform: scale(1);
+    text-shadow: 0 2px 12px color-mix(in srgb, currentColor 14%, transparent);
+  }
+  9% {
+    transform: scale(1.09);
+    text-shadow: 0 3px 20px color-mix(in srgb, currentColor 32%, transparent);
+  }
+  18% {
+    transform: scale(1);
+    text-shadow: 0 2px 12px color-mix(in srgb, currentColor 14%, transparent);
+  }
+  28% {
+    transform: scale(1.055);
+    text-shadow: 0 3px 18px color-mix(in srgb, currentColor 25%, transparent);
+  }
+}
+
+@keyframes intro-heartbeat-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -314; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attendance-percentage-val.is-heartbeating,
+  .heartbeat-wave-path {
+    animation: none !important;
+  }
+}
+
+/* Settings panel: readable navigation and safe sizing on narrow screens. */
+.settings-dialog {
+  width: min(760px, calc(100vw - 24px)) !important;
+  max-height: calc(100dvh - 24px) !important;
+  padding: clamp(14px, 4vw, 24px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.modal-backdrop {
+  z-index: 10000 !important;
+}
+
+.settings-dialog > * {
+  min-width: 0;
+}
+
+.settings-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  gap: 0.75rem;
+  padding-top: 4px;
+}
+
+.settings-header > div {
+  min-width: 0;
+}
+
+.settings-header h3 {
+  font-size: clamp(1.05rem, 4vw, 1.25rem) !important;
+  line-height: 1.25;
+}
+
+.settings-header .btn {
+  flex-shrink: 0;
+}
+
+.settings-admin-banner {
+  flex-wrap: wrap;
+}
+
+.settings-admin-banner > div:first-child {
+  flex: 1 1 145px;
+  min-width: 0;
+}
+
+.settings-admin-banner > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.settings-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 1rem;
+  padding: 5px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+}
+
+.settings-tab-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0.45rem 0.3rem;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-radius: 9px;
+}
+
+.settings-tab-button svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+}
+
+.settings-section-card {
+  min-width: 0;
+}
+
+.settings-dialog .form-control,
+.settings-dialog input,
+.settings-dialog select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-backup-row {
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.settings-backup-row > div {
+  min-width: 0;
+}
+
+@media (min-width: 620px) {
+  .settings-tabs {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .settings-tab-button {
+    min-height: 42px;
+    font-size: 0.74rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .settings-dialog {
+    padding: 14px;
+  }
+
+  .settings-admin-banner {
+    align-items: stretch;
+  }
+
+  .settings-admin-banner > button {
+    flex: 1 1 100%;
+  }
+
+  .settings-backup-row {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .settings-backup-row > .btn {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .settings-dialog {
+    max-height: calc(100dvh - 48px) !important;
+  }
 }
 
 

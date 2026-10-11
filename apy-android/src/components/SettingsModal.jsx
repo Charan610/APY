@@ -606,19 +606,19 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
       }}
     >
       <div
-        className="modal-dialog"
+        className="modal-dialog settings-dialog"
         style={{
           position: 'relative',
           zIndex: 1,
-          maxWidth: '520px',
-          width: '95%',
-          maxHeight: '90vh',
+          maxWidth: '760px',
+          width: '100%',
+          maxHeight: 'calc(100dvh - 24px)',
           overflowY: 'auto',
           boxSizing: 'border-box'
         }}
       >
         {/* Header */}
-        <div style={{
+        <div className="settings-header" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -655,7 +655,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
 
         {/* Admin Quick Banner */}
         {isAdmin && (
-          <div style={{
+          <div className="settings-admin-banner" style={{
             background: 'var(--accent-gold-bg, rgba(217, 119, 6, 0.12))',
             border: '1px solid var(--accent-gold, #d97706)',
             borderRadius: 'var(--radius-md)',
@@ -693,26 +693,11 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
         )}
 
         {/* Organized Tabs Selector */}
-        <div style={{
-          display: 'flex',
-          background: 'var(--surface-alt)',
-          padding: '4px',
-          borderRadius: 'var(--radius-md)',
-          marginBottom: '1.25rem',
-          border: '1px solid var(--rule)',
-          gap: '4px',
-          overflowX: 'auto'
-        }}>
+        <div className="settings-tabs">
           <button
             type="button"
-            className={`btn ${activeTab === 'profile' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: activeTab === 'profile' ? 700 : 500,
-              whiteSpace: 'nowrap'
-            }}
+            className={`btn settings-tab-button ${activeTab === 'profile' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={activeTab === 'profile'}
             onClick={() => { setActiveTab('profile'); setMsg(''); setError(''); }}
           >
             <School size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
@@ -720,14 +705,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           </button>
           <button
             type="button"
-            className={`btn ${activeTab === 'reminders' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: activeTab === 'reminders' ? 700 : 500,
-              whiteSpace: 'nowrap'
-            }}
+            className={`btn settings-tab-button ${activeTab === 'reminders' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={activeTab === 'reminders'}
             onClick={() => { setActiveTab('reminders'); setMsg(''); setError(''); }}
           >
             <Bell size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
@@ -735,14 +714,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           </button>
           <button
             type="button"
-            className={`btn ${activeTab === 'security' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: activeTab === 'security' ? 700 : 500,
-              whiteSpace: 'nowrap'
-            }}
+            className={`btn settings-tab-button ${activeTab === 'security' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={activeTab === 'security'}
             onClick={() => { setActiveTab('security'); setMsg(''); setError(''); }}
           >
             <KeyRound size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
@@ -750,14 +723,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           </button>
           <button
             type="button"
-            className={`btn ${activeTab === 'privacy' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              flex: 1.1,
-              padding: '0.45rem 0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: activeTab === 'privacy' ? 700 : 500,
-              whiteSpace: 'nowrap'
-            }}
+            className={`btn settings-tab-button ${activeTab === 'privacy' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={activeTab === 'privacy'}
             onClick={() => { setActiveTab('privacy'); setMsg(''); setError(''); }}
           >
             <ShieldCheck size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
@@ -765,14 +732,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           </button>
           <button
             type="button"
-            className={`btn ${activeTab === 'server' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              flex: 1,
-              padding: '0.45rem 0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: activeTab === 'server' ? 700 : 500,
-              whiteSpace: 'nowrap'
-            }}
+            className={`btn settings-tab-button ${activeTab === 'server' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={activeTab === 'server'}
             onClick={() => { setActiveTab('server'); setMsg(''); setError(''); }}
           >
             <Server size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
@@ -780,15 +741,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           </button>
           <button
             type="button"
-            className={`btn ${activeTab === 'about' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              flex: 0.8,
-              padding: '0.45rem 0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: activeTab === 'about' ? 700 : 500,
-              whiteSpace: 'nowrap',
-              position: 'relative'
-            }}
+            className={`btn settings-tab-button ${activeTab === 'about' ? 'btn-primary' : 'btn-secondary'}`}
+            aria-pressed={activeTab === 'about'}
             onClick={() => { setActiveTab('about'); setMsg(''); setError(''); }}
           >
             <Info size={13} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
@@ -866,7 +820,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
           <div>
             <form onSubmit={handleSaveProfile}>
               {/* Class Section */}
-              <div style={{
+              <div className="settings-section-card" style={{
                 marginBottom: '1.25rem',
                 background: 'var(--surface-alt)',
                 padding: '1rem',
@@ -897,7 +851,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               </div>
 
               {/* Baseline Attendance */}
-              <div style={{
+              <div className="settings-section-card" style={{
                 marginBottom: '1.25rem',
                 background: 'var(--surface-alt)',
                 padding: '1rem',
@@ -961,7 +915,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
             </form>
 
             {/* Database Snapshot Backup */}
-            <div style={{
+            <div className="settings-backup-row" style={{
               borderTop: '1px solid var(--rule)',
               marginTop: '1.25rem',
               paddingTop: '0.85rem',

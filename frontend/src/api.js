@@ -145,8 +145,8 @@ export const api = {
     } catch (e) {
       console.warn('Logout server note:', e);
     }
-    removeAuthToken();
-    removeStoredUser();
+    setAuthToken(null);
+    setStoredUser(null);
     apiCache.invalidate();
   },
   getMe: () => request('/auth/me'),

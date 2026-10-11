@@ -3,7 +3,7 @@ import BrandLogo from './BrandLogo';
 
 /**
  * Standard cubic-bezier solvers:
- * - easeEntrance: cubic-bezier(0.22, 1, 0.36, 1) — Apple deceleration curve
+ * - easeEntrance: smooth deceleration for a soft, controlled landing
  * - easeOutCubic: 1 - Math.pow(1 - t, 3)
  */
 function createCubicBezierSolver(p1x, p1y, p2x, p2y) {
@@ -43,7 +43,7 @@ function createCubicBezierSolver(p1x, p1y, p2x, p2y) {
   };
 }
 
-const easeEntrance = createCubicBezierSolver(0.22, 1, 0.36, 1);
+const easeEntrance = createCubicBezierSolver(0.18, 1, 0.3, 1);
 const easeOutCubic = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 
 export default function AppLaunchExperience({
@@ -293,8 +293,8 @@ export default function AppLaunchExperience({
 
   // Real Attendance Calculation
   let countProgress = 0;
-  if (elapsedMs >= 1700) {
-    const rawT = Math.min((elapsedMs - 1700) / 950, 1);
+  if (elapsedMs >= 1450) {
+    const rawT = Math.min((elapsedMs - 1450) / 1100, 1);
     countProgress = easeOutCubic(rawT);
   }
   const currentPct = targetPct * countProgress;
@@ -305,7 +305,7 @@ export default function AppLaunchExperience({
   const radius = 72;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (circumference * Math.min(100, Math.max(0, currentPct))) / 100;
-  const ringColor = targetPct >= 75 ? '#255d44' : '#b91c1c';
+  const ringColor = targetPct >= 75 ? 'var(--good)' : 'var(--bad)';
 
   let heroContainerStyle = {};
   if (showAttendanceHero) {
@@ -375,7 +375,6 @@ export default function AppLaunchExperience({
           style={{
             position: 'fixed',
             inset: 0,
-            background: '#fbf8f1',
             opacity: scrimOpacity,
             zIndex: 99990,
             pointerEvents: 'none'
@@ -425,7 +424,7 @@ export default function AppLaunchExperience({
             style={{
               fontSize: '0.92rem',
               fontWeight: 700,
-              color: '#163b2b',
+              color: 'var(--brand-forest)',
               letterSpacing: '0.05em',
               textTransform: 'uppercase',
               marginBottom: '18px',
@@ -455,6 +454,7 @@ export default function AppLaunchExperience({
               style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
             >
               <circle
+                className="attendance-ring-progress"
                 cx={ringSize / 2}
                 cy={ringSize / 2}
                 r={radius}
@@ -478,13 +478,13 @@ export default function AppLaunchExperience({
 
               <path
                 className="heartbeat-wave-path"
-                d="M 52 130 C 66 126, 76 134, 90 128 C 104 122, 114 134, 128 130"
-                stroke="rgba(197, 160, 89, 0.7)"
-                strokeWidth="1.75"
+                d="M 48 130 H 68 L 76 124 L 82 136 L 91 108 L 101 139 L 108 126 H 132"
+                stroke="var(--accent-gold)"
+                strokeWidth="2"
                 strokeLinecap="round"
                 fill="none"
                 style={{
-                  opacity: countProgress > 0 ? 0.8 : 0,
+                  opacity: countProgress > 0 ? 0.95 : 0,
                   transition: 'opacity 0.3s ease'
                 }}
               />
@@ -502,7 +502,7 @@ export default function AppLaunchExperience({
               }}
             >
               <span
-                className="font-serif attendance-percentage-val"
+                className={`font-serif attendance-percentage-val${elapsedMs >= 1450 ? ' is-heartbeating' : ''}`}
                 style={{
                   fontSize: '2.5rem',
                   fontWeight: 800,

@@ -300,8 +300,8 @@ export default function App() {
     setActiveTab('today');
     setShowNotifPrompt(false);
     setHasPlayedIntro(false);
-    setIntroStage('logo-center');
-    setIsHeaderSettled(false);
+    setIsHeaderBrandVisible(false);
+    setIsWidgetVisible(false);
     try {
       sessionStorage.removeItem('apy_intro_played');
     } catch {}
