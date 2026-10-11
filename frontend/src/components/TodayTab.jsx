@@ -94,6 +94,7 @@ export default function TodayTab({
   const [undoAction, setUndoAction] = useState(null);
   const [dayRemarks, setDayRemarks] = useState('');
   const [showRemarkInput, setShowRemarkInput] = useState(false);
+  const [pastAttendanceDrafts, setPastAttendanceDrafts] = useState({});
 
   const todayStr = new Date().toISOString().split('T')[0];
   const todayObj = new Date();
@@ -107,7 +108,9 @@ export default function TodayTab({
   const maxDateStr = maxDateObj.toISOString().split('T')[0];
 
   const isCoveredByBaseline = Boolean(user?.baseline_date && currentDate <= user.baseline_date);
-  const isDateEditable = currentDate >= minDateStr && currentDate <= maxDateStr && !isCoveredByBaseline;
+  const isPastDate = currentDate < todayStr;
+  const hasPastAttendanceRecord = isPastDate && Boolean(dailyLogs[currentDate]?.length);
+  const isDateEditable = currentDate >= minDateStr && currentDate <= maxDateStr && !isCoveredByBaseline && !hasPastAttendanceRecord;
 
   const overall = summary?.overall || { percentage: 0, attended: 0, total: 0 };
   const overallPct = overall.percentage || 0;
@@ -121,11 +124,16 @@ export default function TodayTab({
   }, [user?.section_id]);
 
   useEffect(() => {
+    if (currentDate < todayStr) {
+      setDayRemarks('');
+      setShowRemarkInput(false);
+      return;
+    }
     const entries = dailyLogs[currentDate] || [];
     const existingNote = entries.find(e => e.notes)?.notes || '';
     setDayRemarks(existingNote);
     setShowRemarkInput(Boolean(existingNote));
-  }, [currentDate, dailyLogs]);
+  }, [currentDate, dailyLogs, todayStr]);
 
   const loadInitialData = async () => {
     try {
@@ -192,7 +200,7 @@ export default function TodayTab({
 
   const getWeekDays = () => {
     const days = [];
-    for (let i = -2; i <= 7; i++) {
+    for (let i = -7; i <= 7; i++) {
       const d = new Date();
       d.setDate(todayObj.getDate() + i);
       const iso = d.toISOString().split('T')[0];
@@ -234,7 +242,9 @@ export default function TodayTab({
   }, [currentBlocks]);
 
   const getBlockStatus = (blockId) => {
-    const entries = dailyLogs[currentDate] || [];
+    const entries = isPastDate
+      ? (pastAttendanceDrafts[currentDate] || [])
+      : (dailyLogs[currentDate] || []);
     const match = entries.find(e => e.block_id === blockId);
     return match ? match.status : null;
   };
@@ -334,6 +344,21 @@ export default function TodayTab({
     const currentStatus = getBlockStatus(blockId);
     const targetStatus = (currentStatus === clickedStatus) ? 'unmarked' : clickedStatus;
 
+    if (isPastDate) {
+      const draft = [...(pastAttendanceDrafts[currentDate] || [])];
+      const idx = draft.findIndex(e => e.block_id === blockId);
+      if (targetStatus === 'unmarked') {
+        if (idx >= 0) draft.splice(idx, 1);
+      } else if (idx >= 0) {
+        draft[idx] = { ...draft[idx], status: targetStatus };
+      } else {
+        draft.push({ block_id: blockId, status: targetStatus });
+      }
+      setPastAttendanceDrafts(prev => ({ ...prev, [currentDate]: draft }));
+      setFeedback(targetStatus === 'unmarked' ? 'Selection cleared' : `${targetStatus.toUpperCase()} selected — save to lock`);
+      return;
+    }
+
     // Cache previous for undo
     const prevEntries = dailyLogs[currentDate] ? [...dailyLogs[currentDate]] : [];
     setUndoAction({ date: currentDate, entries: prevEntries });
@@ -372,6 +397,17 @@ export default function TodayTab({
   const handleMarkAll = (status) => {
     if (!isDateEditable || currentBlocks.length === 0) return;
 
+    if (isPastDate) {
+      if (status === 'holiday') return;
+      setPastAttendanceDrafts(prev => ({
+        ...prev,
+        [currentDate]: currentBlocks.map(block => ({ block_id: block.id, status }))
+      }));
+      setUndoAction(null);
+      setFeedback(`All periods selected ${status.toUpperCase()} — save to lock`);
+      return;
+    }
+
     const prevEntries = dailyLogs[currentDate] ? [...dailyLogs[currentDate]] : [];
     setUndoAction({ date: currentDate, entries: prevEntries });
 
@@ -402,8 +438,46 @@ export default function TodayTab({
     queueBackgroundSync(currentDate, entries);
   };
 
+  const handleSavePastAttendance = async () => {
+    if (!isPastDate || !isDateEditable || isSunday || currentBlocks.length === 0) return;
+    const draft = pastAttendanceDrafts[currentDate] || [];
+    const entries = currentBlocks.map(block => {
+      const selected = draft.find(entry => entry.block_id === block.id);
+      return selected ? { block_id: block.id, status: selected.status, notes: null } : null;
+    });
+
+    if (entries.some(entry => !entry || !['present', 'absent'].includes(entry.status))) {
+      setFeedback('Choose Present or Absent for each scheduled period before saving.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await api.markAttendance(currentDate, entries);
+      const savedEntries = entries.map(entry => ({ ...entry }));
+      setDailyLogs(prev => ({ ...prev, [currentDate]: savedEntries }));
+      setPastAttendanceDrafts(prev => {
+        const next = { ...prev };
+        delete next[currentDate];
+        return next;
+      });
+      try {
+        const cached = JSON.parse(localStorage.getItem('apy_logs_cache') || '{}');
+        cached[currentDate] = savedEntries;
+        localStorage.setItem('apy_logs_cache', JSON.stringify(cached));
+      } catch {}
+      if (result?.summary && onAttendanceUpdated) onAttendanceUpdated(result.summary);
+      setFeedback('Past attendance saved and locked.');
+    } catch (err) {
+      setFeedback(err.message || 'Could not save past attendance. Refresh and check existing records.');
+      loadInitialData();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUndo = () => {
-    if (!undoAction || undoAction.date !== currentDate) return;
+    if (isPastDate || !undoAction || undoAction.date !== currentDate) return;
     const restored = undoAction.entries;
     const currentList = dailyLogs[currentDate] || [];
 
@@ -535,6 +609,11 @@ export default function TodayTab({
             <strong>Included in Historical Baseline:</strong> Periods up to & including <strong>{user.baseline_date}</strong> are counted in baseline figures. Daily logging starts after this cutoff.
           </span>
         </div>
+      ) : hasPastAttendanceRecord ? (
+        <div className="alert-callout error">
+          <Lock size={16} />
+          <span>Past attendance is already recorded for this date and is locked against editing.</span>
+        </div>
       ) : !isDateEditable ? (
         <div className="alert-callout error">
           <Lock size={16} />
@@ -542,11 +621,18 @@ export default function TodayTab({
         </div>
       ) : null}
 
+      {isPastDate && isDateEditable && !isSunday && currentBlocks.length > 0 && (
+        <div className="alert-callout" style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', color: 'var(--ink)' }}>
+          <Calendar size={16} color="var(--accent-gold-dark)" />
+          <span>Select Present or Absent for each scheduled period, then save once. Saved past attendance cannot be changed.</span>
+        </div>
+      )}
+
       {/* 3. Quick Action Cards (4 Cards Grid matching reference) */}
       {isDateEditable && !isSunday && currentBlocks.length > 0 && (
         <div className="quick-actions-grid">
           {/* Card 1: Remarks */}
-          <div 
+          {!isPastDate && <div
             className="quick-action-card"
             onClick={() => setShowRemarkInput(prev => !prev)}
             title="Add On-Duty / Medical / Fest notes"
@@ -561,7 +647,7 @@ export default function TodayTab({
               <div className="quick-action-title">Remarks</div>
               <div className="quick-action-sub">{dayRemarks ? 'Note Active' : 'OD / Medical / Fest'}</div>
             </div>
-          </div>
+          </div>}
 
           {/* Card 2: All Present */}
           <div 
@@ -600,7 +686,7 @@ export default function TodayTab({
           </div>
 
           {/* Card 4: Day Holiday */}
-          <div 
+          {!isPastDate && <div
             className="quick-action-card holiday"
             onClick={() => handleMarkAll('holiday')}
             title="Mark day as holiday"
@@ -615,12 +701,25 @@ export default function TodayTab({
               <div className="quick-action-title">Day Holiday</div>
               <div className="quick-action-sub">No attendance</div>
             </div>
-          </div>
+          </div>}
+        </div>
+      )}
+
+      {isPastDate && isDateEditable && !isSunday && currentBlocks.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleSavePastAttendance}
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : 'Save Past Attendance'}
+          </button>
         </div>
       )}
 
       {/* Undo Action Pill (if available) */}
-      {undoAction && (
+      {undoAction && !isPastDate && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
           <button
             type="button"
@@ -635,7 +734,7 @@ export default function TodayTab({
       )}
 
       {/* Day Remarks Input Box */}
-      {showRemarkInput && isDateEditable && !isSunday && (
+      {showRemarkInput && isDateEditable && !isSunday && !isPastDate && (
         <div style={{ background: 'var(--surface-alt)', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', border: '1px solid var(--rule)' }}>
           <FileText size={16} color="var(--accent-gold)" />
           <input
@@ -737,7 +836,7 @@ export default function TodayTab({
                     className={`btn-status-action ${status === 'present' ? 'is-present' : ''}`}
                     onClick={() => handleSetBlockStatus(block.id, 'present')}
                     disabled={!isDateEditable}
-                    title="Mark Present"
+                    title={isPastDate ? 'Select Present, then save the past date' : 'Mark Present'}
                   >
                     <Check size={14} strokeWidth={3} />
                     <span>PRESENT</span>
@@ -748,7 +847,7 @@ export default function TodayTab({
                     className={`btn-status-action ${status === 'absent' ? 'is-absent' : ''}`}
                     onClick={() => handleSetBlockStatus(block.id, 'absent')}
                     disabled={!isDateEditable}
-                    title="Mark Absent"
+                    title={isPastDate ? 'Select Absent, then save the past date' : 'Mark Absent'}
                   >
                     <X size={14} strokeWidth={3} />
                     <span>ABSENT</span>

@@ -41,9 +41,9 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   // APK Updates & Push Broadcast State
   const [broadcasts, setBroadcasts] = useState([]);
   const [broadcastsLoading, setBroadcastsLoading] = useState(false);
-  const [broadcastVersion, setBroadcastVersion] = useState('1.4.3');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.3/APY.apk');
-  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.3 is live with a smoother launch animation, heartbeat attendance motion, refreshed colors, and a responsive settings panel.');
+  const [broadcastVersion, setBroadcastVersion] = useState('1.4.4');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.4/APY.apk');
+  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.4 adds safe past attendance entry while preserving saved history.');
   const [broadcasting, setBroadcasting] = useState(false);
   
   const [error, setError] = useState('');

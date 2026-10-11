@@ -1528,7 +1528,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               </p>
             </div>
 
-            {/* What's New in v1.4.2 Changelog Card */}
+            {/* What's New in v1.4.4 Changelog Card */}
             <div style={{
               background: 'var(--surface-alt)',
               border: '1px solid var(--rule)',
@@ -1554,6 +1554,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                 <li><strong>⚡ Ultra-Fast 0-Sec Instant Startup</strong>: Eliminated cold-boot delays and network blocking gates for instant home screen load.</li>
                 <li><strong>🛡️ Resilient SWR & Offline Caching</strong>: Instant cached data rendering with background synchronization and quick request timeouts.</li>
                 <li><strong>🎯 Target Goal Calculator</strong>: Calculate consecutive periods & completion dates to hit 75%, 80%, or 85%.</li>
+                <li><strong>🗓️ Safe Past Attendance Entry</strong>: View the previous week, add attendance only to eligible empty class dates, and keep saved history locked.</li>
               </ul>
             </div>
 

@@ -228,10 +228,78 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
     section_id = current_user["section_id"]
     
     # 1. Enforce strict 7-day rule & baseline cutoff date server-side
-    validate_edit_window(req.log_date, current_user.get("baseline_date"))
+    log_date = validate_edit_window(req.log_date, current_user.get("baseline_date"))
+    is_past_date = log_date < get_today_ist()
     
     with get_db() as conn:
         cursor = conn.cursor()
+
+        if is_past_date:
+            # Past attendance is a one-time, whole-day save. The client must send
+            # the complete current schedule so empty dates can be filled once and
+            # existing history can never be overwritten or partially duplicated.
+            weekday = (log_date.weekday() + 1) % 7  # Sunday=0, Saturday=6
+            if weekday == 0:
+                raise HTTPException(status_code=400, detail="Sunday is a fixed holiday and cannot receive attendance entries.")
+
+            cursor.execute(
+                "SELECT id FROM timetable_blocks WHERE section_id = ? AND weekday = ? ORDER BY order_index",
+                (section_id, weekday)
+            )
+            scheduled_block_ids = [row["id"] for row in cursor.fetchall()]
+            if not scheduled_block_ids:
+                raise HTTPException(status_code=400, detail="No class schedule exists for this date.")
+
+            requested_ids = [entry.block_id for entry in req.entries]
+            if len(requested_ids) != len(set(requested_ids)):
+                raise HTTPException(status_code=400, detail="Duplicate attendance entries are not allowed.")
+            if set(requested_ids) != set(scheduled_block_ids):
+                raise HTTPException(status_code=409, detail="The class schedule for this date changed. Refresh and select a valid schedule.")
+            if any(entry.status not in ("present", "absent") for entry in req.entries):
+                raise HTTPException(status_code=400, detail="Past dates require Present or Absent for every scheduled period.")
+
+            requested_statuses = {entry.block_id: entry.status for entry in req.entries}
+            cursor.execute(
+                "SELECT block_id, status FROM daily_logs WHERE user_id = ? AND log_date = ?",
+                (user_id, req.log_date)
+            )
+            existing_statuses = {row["block_id"]: row["status"] for row in cursor.fetchall()}
+            if existing_statuses:
+                if existing_statuses == requested_statuses:
+                    return {
+                        "status": "success",
+                        "message": f"Attendance for {req.log_date} is already saved and locked.",
+                        "summary": compute_summary_for_user(conn, current_user)
+                    }
+                raise HTTPException(status_code=409, detail="Attendance already exists for this date and cannot be changed.")
+
+            # Use one insert statement. The unique constraint makes simultaneous
+            # submissions idempotent; the read-back below rejects conflicting data.
+            values_sql = ", ".join(["(?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"] * len(req.entries))
+            params = []
+            for entry in req.entries:
+                params.extend((user_id, req.log_date, entry.block_id, entry.status, entry.notes))
+            cursor.execute(
+                f"""
+                INSERT INTO daily_logs (user_id, log_date, block_id, status, notes, updated_at)
+                VALUES {values_sql}
+                ON CONFLICT(user_id, log_date, block_id) DO NOTHING
+                """,
+                tuple(params)
+            )
+            cursor.execute(
+                "SELECT block_id, status FROM daily_logs WHERE user_id = ? AND log_date = ?",
+                (user_id, req.log_date)
+            )
+            saved_statuses = {row["block_id"]: row["status"] for row in cursor.fetchall()}
+            if saved_statuses != requested_statuses:
+                raise HTTPException(status_code=409, detail="Another attendance save already locked this date. Refresh to see the saved records.")
+
+            return {
+                "status": "success",
+                "message": f"Past attendance saved and locked for {req.log_date}.",
+                "summary": compute_summary_for_user(conn, current_user)
+            }
         
         # 1. Verify all block IDs with fast in-memory cache
         valid_block_ids = get_section_block_ids(cursor, section_id)
