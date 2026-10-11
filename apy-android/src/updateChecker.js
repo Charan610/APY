@@ -1,4 +1,6 @@
-export const CURRENT_APP_VERSION = '1.4.4';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+export const CURRENT_APP_VERSION = '1.4.5';
 export const CURRENT_APP_BUILD_DATE = 'October 11, 2026';
 export const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Charan610/APY/releases/latest';
 
@@ -165,10 +167,30 @@ export async function checkForAppUpdate(force = false) {
 /**
  * Downloads the APK / opens the download URL in the browser.
  */
-export async function installAppUpdate(apkUrl) {
+const NativeAppUpdate = registerPlugin('AppUpdate');
+
+export async function installAppUpdate(apkUrl, onProgress) {
   if (!apkUrl) {
     throw new Error('No APK download URL provided.');
   }
+
+  if (Capacitor.isNativePlatform()) {
+    const { canInstall } = await NativeAppUpdate.canInstallPackages();
+    if (!canInstall) {
+      await NativeAppUpdate.openInstallPermissionSettings();
+      return { status: 'permission_required' };
+    }
+
+    const listener = onProgress
+      ? await NativeAppUpdate.addListener('downloadProgress', onProgress)
+      : null;
+    try {
+      return await NativeAppUpdate.downloadAndInstall({ url: apkUrl });
+    } finally {
+      await listener?.remove();
+    }
+  }
+
   window.open(apkUrl, '_blank');
   return { status: 'web_opened' };
 }

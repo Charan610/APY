@@ -578,7 +578,11 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
         }
       });
       if (res?.status === 'prompted') {
-        setInstallStatus('Download complete! Opening Android package installer...');
+        setInstallStatus('Download complete. Confirm Install in Android to finish updating APY.');
+      } else if (res?.status === 'permission_required') {
+        setInstallStatus('Allow APY to install apps in Android settings, return here, then tap Update Now again.');
+      } else if (res?.status === 'web_opened') {
+        setInstallStatus('APK download opened in your browser. Open the downloaded file to install the update.');
       }
     } catch (err) {
       setDownloadError(err.message || 'Download failed. Please try again.');
@@ -1528,7 +1532,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               </p>
             </div>
 
-            {/* What's New in v1.4.4 Changelog Card */}
+            {/* What's New in v1.4.5 Changelog Card */}
             <div style={{
               background: 'var(--surface-alt)',
               border: '1px solid var(--rule)',
@@ -1555,6 +1559,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                 <li><strong>🛡️ Resilient SWR & Offline Caching</strong>: Instant cached data rendering with background synchronization and quick request timeouts.</li>
                 <li><strong>🎯 Target Goal Calculator</strong>: Calculate consecutive periods & completion dates to hit 75%, 80%, or 85%.</li>
                 <li><strong>🗓️ Safe Past Attendance Entry</strong>: View the previous week, add attendance only to eligible empty class dates, and keep saved history locked.</li>
+                <li><strong>⬆️ In-App Android Updates</strong>: Download updates in APY and open Android's installer directly from About.</li>
               </ul>
             </div>
 
@@ -1643,6 +1648,21 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                           borderRadius: '999px'
                         }} />
                       </div>
+                    </div>
+                  )}
+
+                  {installStatus && !downloading && (
+                    <div role="status" style={{
+                      marginBottom: '0.6rem',
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--surface-alt)',
+                      border: '1px solid var(--rule)',
+                      color: 'var(--ink-soft)',
+                      fontSize: '0.74rem',
+                      lineHeight: 1.45
+                    }}>
+                      {installStatus}
                     </div>
                   )}
 

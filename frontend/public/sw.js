@@ -1,5 +1,5 @@
 // Service Worker for Attendance Register Daily Reminder Push Notifications & App-Shell Caching
-const CACHE_NAME = 'apy-static-v1.4.4';
+const CACHE_NAME = 'apy-static-v1.4.5';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
