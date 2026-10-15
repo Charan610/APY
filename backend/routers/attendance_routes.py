@@ -235,9 +235,8 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
         cursor = conn.cursor()
 
         if is_past_date:
-            # Past attendance is a one-time, whole-day save. The client must send
-            # the complete current schedule so empty dates can be filled once and
-            # existing history can never be overwritten or partially duplicated.
+            # Past attendance: whole-day save with UPSERT. Users can edit
+            # previously saved past-day attendance within the 7-day window.
             weekday = (log_date.weekday() + 1) % 7  # Sunday=0, Saturday=6
             if weekday == 0:
                 raise HTTPException(status_code=400, detail="Sunday is a fixed holiday and cannot receive attendance entries.")
@@ -258,46 +257,21 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
             if any(entry.status not in ("present", "absent") for entry in req.entries):
                 raise HTTPException(status_code=400, detail="Past dates require Present or Absent for every scheduled period.")
 
-            requested_statuses = {entry.block_id: entry.status for entry in req.entries}
-            cursor.execute(
-                "SELECT block_id, status FROM daily_logs WHERE user_id = ? AND log_date = ?",
-                (user_id, req.log_date)
-            )
-            existing_statuses = {row["block_id"]: row["status"] for row in cursor.fetchall()}
-            if existing_statuses:
-                if existing_statuses == requested_statuses:
-                    return {
-                        "status": "success",
-                        "message": f"Attendance for {req.log_date} is already saved and locked.",
-                        "summary": compute_summary_for_user(conn, current_user)
-                    }
-                raise HTTPException(status_code=409, detail="Attendance already exists for this date and cannot be changed.")
-
-            # Use one insert statement. The unique constraint makes simultaneous
-            # submissions idempotent; the read-back below rejects conflicting data.
-            values_sql = ", ".join(["(?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"] * len(req.entries))
-            params = []
-            for entry in req.entries:
-                params.extend((user_id, req.log_date, entry.block_id, entry.status, entry.notes))
-            cursor.execute(
-                f"""
+            # UPSERT: insert new or update existing attendance records
+            upsert_sql = """
                 INSERT INTO daily_logs (user_id, log_date, block_id, status, notes, updated_at)
-                VALUES {values_sql}
-                ON CONFLICT(user_id, log_date, block_id) DO NOTHING
-                """,
-                tuple(params)
-            )
-            cursor.execute(
-                "SELECT block_id, status FROM daily_logs WHERE user_id = ? AND log_date = ?",
-                (user_id, req.log_date)
-            )
-            saved_statuses = {row["block_id"]: row["status"] for row in cursor.fetchall()}
-            if saved_statuses != requested_statuses:
-                raise HTTPException(status_code=409, detail="Another attendance save already locked this date. Refresh to see the saved records.")
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, log_date, block_id) 
+                DO UPDATE SET status = excluded.status, 
+                              notes = COALESCE(excluded.notes, daily_logs.notes),
+                              updated_at = CURRENT_TIMESTAMP
+            """
+            for entry in req.entries:
+                cursor.execute(upsert_sql, (user_id, req.log_date, entry.block_id, entry.status, entry.notes))
 
             return {
                 "status": "success",
-                "message": f"Past attendance saved and locked for {req.log_date}.",
+                "message": f"Past attendance saved for {req.log_date}.",
                 "summary": compute_summary_for_user(conn, current_user)
             }
         

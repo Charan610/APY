@@ -110,7 +110,7 @@ export default function TodayTab({
   const isCoveredByBaseline = Boolean(user?.baseline_date && currentDate <= user.baseline_date);
   const isPastDate = currentDate < todayStr;
   const hasPastAttendanceRecord = isPastDate && Boolean(dailyLogs[currentDate]?.length);
-  const isDateEditable = currentDate >= minDateStr && currentDate <= maxDateStr && !isCoveredByBaseline && !hasPastAttendanceRecord;
+  const isDateEditable = currentDate >= minDateStr && currentDate <= maxDateStr && !isCoveredByBaseline;
 
   const overall = summary?.overall || { percentage: 0, attended: 0, total: 0 };
   const overallPct = overall.percentage || 0;
@@ -134,6 +134,18 @@ export default function TodayTab({
     setDayRemarks(existingNote);
     setShowRemarkInput(Boolean(existingNote));
   }, [currentDate, dailyLogs, todayStr]);
+
+  // Pre-populate past attendance drafts from existing logs for editing
+  useEffect(() => {
+    if (isPastDate && hasPastAttendanceRecord && !pastAttendanceDrafts[currentDate]) {
+      const existingLogs = dailyLogs[currentDate] || [];
+      const draft = existingLogs.map(entry => ({
+        block_id: entry.block_id,
+        status: entry.status
+      }));
+      setPastAttendanceDrafts(prev => ({ ...prev, [currentDate]: draft }));
+    }
+  }, [currentDate, isPastDate, hasPastAttendanceRecord, dailyLogs]);
 
   const loadInitialData = async () => {
     try {
@@ -467,7 +479,7 @@ export default function TodayTab({
         localStorage.setItem('apy_logs_cache', JSON.stringify(cached));
       } catch {}
       if (result?.summary && onAttendanceUpdated) onAttendanceUpdated(result.summary);
-      setFeedback('Past attendance saved and locked.');
+      setFeedback('Past attendance saved successfully.');
     } catch (err) {
       setFeedback(err.message || 'Could not save past attendance. Refresh and check existing records.');
       loadInitialData();
@@ -610,9 +622,9 @@ export default function TodayTab({
           </span>
         </div>
       ) : hasPastAttendanceRecord ? (
-        <div className="alert-callout error">
-          <Lock size={16} />
-          <span>Past attendance is already recorded for this date and is locked against editing.</span>
+        <div className="alert-callout" style={{ background: 'var(--surface-alt)', border: '1px solid var(--accent-gold)', color: 'var(--ink)' }}>
+          <Calendar size={16} color="var(--accent-gold-dark)" />
+          <span>Past attendance already recorded. You can <strong>edit</strong> your selections and save again.</span>
         </div>
       ) : !isDateEditable ? (
         <div className="alert-callout error">
@@ -621,10 +633,10 @@ export default function TodayTab({
         </div>
       ) : null}
 
-      {isPastDate && isDateEditable && !isSunday && currentBlocks.length > 0 && (
+      {isPastDate && isDateEditable && !hasPastAttendanceRecord && !isSunday && currentBlocks.length > 0 && (
         <div className="alert-callout" style={{ background: 'var(--surface-alt)', border: '1px solid var(--rule)', color: 'var(--ink)' }}>
           <Calendar size={16} color="var(--accent-gold-dark)" />
-          <span>Select Present or Absent for each scheduled period, then save once. Saved past attendance cannot be changed.</span>
+          <span>Select Present or Absent for each scheduled period, then save.</span>
         </div>
       )}
 
@@ -713,7 +725,7 @@ export default function TodayTab({
             onClick={handleSavePastAttendance}
             disabled={saving}
           >
-            {saving ? 'Saving…' : 'Save Past Attendance'}
+            {saving ? 'Saving…' : hasPastAttendanceRecord ? 'Update Past Attendance' : 'Save Past Attendance'}
           </button>
         </div>
       )}
