@@ -228,10 +228,52 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
     section_id = current_user["section_id"]
     
     # 1. Enforce strict 7-day rule & baseline cutoff date server-side
-    validate_edit_window(req.log_date, current_user.get("baseline_date"))
+    log_date = validate_edit_window(req.log_date, current_user.get("baseline_date"))
+    is_past_date = log_date < get_today_ist()
     
     with get_db() as conn:
         cursor = conn.cursor()
+
+        if is_past_date:
+            # Past attendance: whole-day save with UPSERT. Users can edit
+            # previously saved past-day attendance within the 7-day window.
+            weekday = (log_date.weekday() + 1) % 7  # Sunday=0, Saturday=6
+            if weekday == 0:
+                raise HTTPException(status_code=400, detail="Sunday is a fixed holiday and cannot receive attendance entries.")
+
+            cursor.execute(
+                "SELECT id FROM timetable_blocks WHERE section_id = ? AND weekday = ? ORDER BY order_index",
+                (section_id, weekday)
+            )
+            scheduled_block_ids = [row["id"] for row in cursor.fetchall()]
+            if not scheduled_block_ids:
+                raise HTTPException(status_code=400, detail="No class schedule exists for this date.")
+
+            requested_ids = [entry.block_id for entry in req.entries]
+            if len(requested_ids) != len(set(requested_ids)):
+                raise HTTPException(status_code=400, detail="Duplicate attendance entries are not allowed.")
+            if set(requested_ids) != set(scheduled_block_ids):
+                raise HTTPException(status_code=409, detail="The class schedule for this date changed. Refresh and select a valid schedule.")
+            if any(entry.status not in ("present", "absent") for entry in req.entries):
+                raise HTTPException(status_code=400, detail="Past dates require Present or Absent for every scheduled period.")
+
+            # UPSERT: insert new or update existing attendance records
+            upsert_sql = """
+                INSERT INTO daily_logs (user_id, log_date, block_id, status, notes, updated_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, log_date, block_id) 
+                DO UPDATE SET status = excluded.status, 
+                              notes = COALESCE(excluded.notes, daily_logs.notes),
+                              updated_at = CURRENT_TIMESTAMP
+            """
+            for entry in req.entries:
+                cursor.execute(upsert_sql, (user_id, req.log_date, entry.block_id, entry.status, entry.notes))
+
+            return {
+                "status": "success",
+                "message": f"Past attendance saved for {req.log_date}.",
+                "summary": compute_summary_for_user(conn, current_user)
+            }
         
         # 1. Verify all block IDs with fast in-memory cache
         valid_block_ids = get_section_block_ids(cursor, section_id)
