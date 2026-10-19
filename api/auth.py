@@ -22,6 +22,8 @@ except Exception:
     HAS_BCRYPT = False
 
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", os.environ.get("SECRET_KEY", "cse-attendance-ledger-jwt-secret-key-2026"))
+if os.environ.get("VERCEL") and not (os.environ.get("JWT_SECRET_KEY") or os.environ.get("SECRET_KEY")):
+    print("CRITICAL: JWT_SECRET_KEY/SECRET_KEY env var not set in production; falling back to default secret. Set a strong random secret before go-live.")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 180  # 180 days expiry (semester long)
 
