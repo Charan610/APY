@@ -28,3 +28,11 @@ api/backend/backups/
 .DS_Store
 Thumbs.db
 *.idsig
+
+# Runtime databases (never commit user data)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+# Vercel build output (regenerated on deploy)
+/dist/
