@@ -218,6 +218,7 @@ export default function TodayTab({
       const iso = d.toISOString().split('T')[0];
       const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
       const isPastBaseline = Boolean(user?.baseline_date && iso <= user.baseline_date);
+      const dayEntries = dailyLogs[iso] || [];
       days.push({
         dateStr: iso,
         dayName: dayNames[d.getDay()],
@@ -225,7 +226,8 @@ export default function TodayTab({
         isToday: iso === todayStr,
         isSunday: d.getDay() === 0,
         isPastBaseline,
-        hasLogs: Boolean(dailyLogs[iso]?.length)
+        hasLogs: Boolean(dayEntries.length),
+        isHoliday: Boolean(dayEntries.length) && dayEntries.every(e => e.status === 'holiday')
       });
     }
     return days;
@@ -601,7 +603,7 @@ export default function TodayTab({
           >
             <span className="ribbon-day-label">{d.dayName}</span>
             <span className="ribbon-day-num">{d.dayNum}</span>
-            <span className={`ribbon-status-dot ${d.isSunday ? 'holiday' : d.isPastBaseline ? 'baseline' : d.hasLogs ? 'logged' : ''}`} />
+            <span className={`ribbon-status-dot ${d.isSunday || d.isHoliday ? 'holiday' : d.isPastBaseline ? 'baseline' : d.hasLogs ? 'logged' : ''}`} />
           </button>
         ))}
       </div>
