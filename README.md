@@ -164,6 +164,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## 🔒 Security & Privacy
 - Passwords and PINs are stored as secure, one-way cryptographic hashes.
+- Set `JWT_SECRET_KEY` (strong random) in production; the API logs a critical warning if it falls back to the development default.
 - Server-side edit window bounds data manipulation to valid active cycles (`today - 7 days <= log_date <= today`).
 - Rate limiting on authentication endpoints stops brute-force attempts.
 - Automated snapshot backups protect against data loss.
