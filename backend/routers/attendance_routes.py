@@ -254,8 +254,8 @@ def mark_attendance(req: MarkAttendanceRequest, current_user: dict = Depends(get
                 raise HTTPException(status_code=400, detail="Duplicate attendance entries are not allowed.")
             if set(requested_ids) != set(scheduled_block_ids):
                 raise HTTPException(status_code=409, detail="The class schedule for this date changed. Refresh and select a valid schedule.")
-            if any(entry.status not in ("present", "absent") for entry in req.entries):
-                raise HTTPException(status_code=400, detail="Past dates require Present or Absent for every scheduled period.")
+            if any(entry.status not in ("present", "absent", "holiday") for entry in req.entries):
+                raise HTTPException(status_code=400, detail="Past dates require Present, Absent, or Holiday for every scheduled period.")
 
             # UPSERT: insert new or update existing attendance records
             upsert_sql = """
