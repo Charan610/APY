@@ -75,7 +75,7 @@ app.add_middleware(
     allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Client-Platform"],
 )
 
 from starlette.middleware.gzip import GZipMiddleware
