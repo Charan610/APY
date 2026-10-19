@@ -487,6 +487,43 @@ export default function TodayTab({
       setSaving(false);
     }
   };
+  const handleMarkPastHoliday = async () => {
+    if (!isPastDate || !isDateEditable || isSunday || currentBlocks.length === 0) return;
+
+    const entries = currentBlocks.map(block => ({
+      block_id: block.id,
+      status: 'holiday',
+      notes: null
+    }));
+
+    setSaving(true);
+    try {
+      const result = await api.markAttendance(currentDate, entries);
+      const savedEntries = entries.map(entry => ({ ...entry }));
+      setDailyLogs(prev => ({
+        ...prev,
+        [currentDate]: savedEntries
+      }));
+      setPastAttendanceDrafts(prev => {
+        const next = { ...prev };
+        delete next[currentDate];
+        return next;
+      });
+      try {
+        const cached = JSON.parse(localStorage.getItem('apy_logs_cache') || '{}');
+        cached[currentDate] = savedEntries;
+        localStorage.setItem('apy_logs_cache', JSON.stringify(cached));
+      } catch {}
+      if (result?.summary && onAttendanceUpdated) onAttendanceUpdated(result.summary);
+      setFeedback('Past day marked as holiday.');
+    } catch (err) {
+      setFeedback(err.message || 'Could not mark past day as holiday.');
+      loadInitialData();
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const handleUndo = () => {
     if (isPastDate || !undoAction || undoAction.date !== currentDate) return;
@@ -718,7 +755,15 @@ export default function TodayTab({
       )}
 
       {isPastDate && isDateEditable && !isSunday && currentBlocks.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginBottom: '1rem' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleMarkPastHoliday}
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : 'Mark Whole Past Day Holiday'}
+          </button>
           <button
             type="button"
             className="btn btn-primary"
