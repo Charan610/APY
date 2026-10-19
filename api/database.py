@@ -1,6 +1,5 @@
 import sqlite3
 import os
-import shutil
 import json
 import urllib.request
 import urllib.error
@@ -29,12 +28,6 @@ if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
         pass
     DB_PATH = os.path.join(TMP_DIR, "attendance.db")
     BACKUP_DIR = os.path.join(TMP_DIR, "backups")
-    if not os.path.exists(DB_PATH) and os.path.exists(DEFAULT_DB_PATH):
-        try:
-            shutil.copyfile(DEFAULT_DB_PATH, DB_PATH)
-            os.chmod(DB_PATH, 0o666)
-        except Exception as e:
-            print("DB copy notice:", e)
 else:
     DB_PATH = DEFAULT_DB_PATH
     BACKUP_DIR = os.path.join(DB_DIR, "backups")
