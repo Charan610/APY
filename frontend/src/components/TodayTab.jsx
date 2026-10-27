@@ -263,6 +263,150 @@ export default function TodayTab({
     return match ? match.status : null;
   };
 
+  const dayStatusInfo = useMemo(() => {
+    if (isSunday) {
+      return {
+        label: 'Holiday',
+        badgeDetail: 'Sunday',
+        subtext: 'Sunday',
+        type: 'holiday',
+        icon: Coffee
+      };
+    }
+
+    if (isCoveredByBaseline) {
+      return {
+        label: 'Baseline',
+        badgeDetail: 'Cutoff',
+        subtext: 'Historical Record',
+        type: 'baseline',
+        icon: Lock
+      };
+    }
+
+    if (currentBlocks.length === 0) {
+      return {
+        label: 'No Classes',
+        badgeDetail: '',
+        subtext: 'No scheduled periods',
+        type: 'empty',
+        icon: Calendar
+      };
+    }
+
+    const entries = isPastDate
+      ? (pastAttendanceDrafts[currentDate] || dailyLogs[currentDate] || [])
+      : (dailyLogs[currentDate] || []);
+
+    let presentCount = 0;
+    let absentCount = 0;
+    let holidayCount = 0;
+    let unmarkedCount = 0;
+
+    for (const b of currentBlocks) {
+      const match = entries.find(e => e.block_id === b.id);
+      const st = match?.status;
+      if (st === 'present') presentCount++;
+      else if (st === 'absent') absentCount++;
+      else if (st === 'holiday') holidayCount++;
+      else unmarkedCount++;
+    }
+
+    const total = currentBlocks.length;
+
+    // All or explicit holiday
+    if (holidayCount > 0 && presentCount === 0 && absentCount === 0) {
+      return {
+        label: 'Holiday',
+        badgeDetail: total === 1 ? '' : 'Day',
+        subtext: total === 1 ? 'Period Holiday' : 'Day Holiday',
+        type: 'holiday',
+        icon: Coffee
+      };
+    }
+
+    // All Present
+    if (presentCount === total) {
+      return {
+        label: 'Present',
+        badgeDetail: total > 1 ? 'All' : '',
+        subtext: `All ${total} Periods Attended`,
+        type: 'present',
+        icon: CheckCheck
+      };
+    }
+
+    // All Absent
+    if (absentCount === total) {
+      return {
+        label: 'Absent',
+        badgeDetail: total > 1 ? 'All' : '',
+        subtext: `All ${total} Periods Missed`,
+        type: 'absent',
+        icon: UserX
+      };
+    }
+
+    // Partial (mix of present and absent)
+    if (presentCount > 0 && absentCount > 0) {
+      return {
+        label: 'Partial',
+        badgeDetail: `${presentCount}P • ${absentCount}A`,
+        subtext: `${presentCount} Present, ${absentCount} Absent`,
+        type: 'partial',
+        icon: Check
+      };
+    }
+
+    // Some present, none absent
+    if (presentCount > 0 && absentCount === 0) {
+      return {
+        label: 'Present',
+        badgeDetail: `${presentCount}/${total}`,
+        subtext: `${presentCount} Present, ${unmarkedCount} Pending`,
+        type: 'present',
+        icon: Check
+      };
+    }
+
+    // Some absent, none present
+    if (absentCount > 0 && presentCount === 0) {
+      return {
+        label: 'Absent',
+        badgeDetail: `${absentCount}/${total}`,
+        subtext: `${absentCount} Absent, ${unmarkedCount} Pending`,
+        type: 'absent',
+        icon: X
+      };
+    }
+
+    return {
+      label: 'Not Marked',
+      badgeDetail: '',
+      subtext: isPastDate ? 'Attendance Pending' : 'Tap to mark',
+      type: 'unmarked',
+      icon: Calendar
+    };
+  }, [isSunday, isCoveredByBaseline, currentBlocks, isPastDate, pastAttendanceDrafts, dailyLogs, currentDate]);
+
+  const DayStatusIcon = dayStatusInfo.icon;
+
+  const ribbonRef = useRef(null);
+  const activeDateRef = useRef(null);
+  const isFirstMountRef = useRef(true);
+
+  // Ensure today date / active date is always in the middle of the ribbon
+  useEffect(() => {
+    if (activeDateRef.current) {
+      activeDateRef.current.scrollIntoView({
+        behavior: isFirstMountRef.current ? 'auto' : 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+      isFirstMountRef.current = false;
+    }
+  }, [currentDate]);
+
   // Debounced, coalesced background sync queue
   const syncTimeoutRef = useRef(null);
   const inFlightRef = useRef(false);
@@ -592,10 +736,11 @@ export default function TodayTab({
   return (
     <div className="today-tab-content">
       {/* 1. Horizontal Week Navigator Ribbon */}
-      <div className="week-navigator-ribbon" role="tablist" aria-label="Select Date">
+      <div className="week-navigator-ribbon" ref={ribbonRef} role="tablist" aria-label="Select Date">
         {getWeekDays().map((d) => (
           <button
             key={d.dateStr}
+            ref={d.dateStr === currentDate ? activeDateRef : null}
             type="button"
             className={`ribbon-day-cell ${currentDate === d.dateStr ? 'active' : ''}`}
             onClick={() => { setCurrentDate(d.dateStr); setFeedback(''); setUndoAction(null); }}
@@ -615,11 +760,28 @@ export default function TodayTab({
           <div className="today-hero-date-row">
             <span className="today-hero-date">{formattedDate.monthDay}</span>
             {currentDate === todayStr && <span className="today-hero-badge">TODAY</span>}
+            <span className={`day-status-pill status-${dayStatusInfo.type}`}>
+              <DayStatusIcon size={12} strokeWidth={2.5} />
+              <span>{dayStatusInfo.label}</span>
+              {dayStatusInfo.badgeDetail && (
+                <span className="day-status-detail">{dayStatusInfo.badgeDetail}</span>
+              )}
+            </span>
           </div>
           <div className="today-hero-subline">
             <span>Section {user?.section_label || 'C'}</span>
             <span>•</span>
-            <span>{feedback || (saving ? 'Saving...' : isCoveredByBaseline ? 'Baseline Cutoff' : 'Active Schedule Window')}</span>
+            <span>
+              {feedback || (
+                saving
+                  ? 'Saving changes...'
+                  : isCoveredByBaseline
+                    ? 'Baseline Cutoff'
+                    : dayStatusInfo.subtext
+                      ? `${dayStatusInfo.label} • ${dayStatusInfo.subtext}`
+                      : `${dayStatusInfo.label}`
+              )}
+            </span>
           </div>
         </div>
 

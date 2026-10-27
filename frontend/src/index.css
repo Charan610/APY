@@ -423,9 +423,17 @@ h1, h2, h3, h4, .heading-ledger {
   display: flex;
   gap: 0.5rem;
   overflow-x: auto;
-  padding: 0.25rem 0 0.85rem;
+  padding: 0.25rem 0.5rem 0.85rem;
   margin-bottom: 0.85rem;
   scrollbar-width: none;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 960px) {
+  .week-navigator-ribbon {
+    justify-content: center;
+  }
 }
 
 .week-navigator-ribbon::-webkit-scrollbar {
@@ -543,8 +551,9 @@ h1, h2, h3, h4, .heading-ledger {
 
 .today-hero-date-row {
   display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .today-hero-date {
@@ -567,6 +576,77 @@ h1, h2, h3, h4, .heading-ledger {
   background: var(--accent-gold-soft);
   color: var(--accent-gold-dark);
   border: 1px solid var(--accent-gold-border);
+}
+
+.day-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.65rem;
+  border-radius: var(--radius-full);
+  line-height: 1.2;
+  transition: all 0.2s cubic-bezier(0.18, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.day-status-pill.status-present {
+  background: var(--good-soft);
+  color: var(--good);
+  border: 1px solid var(--good-border);
+  box-shadow: 0 1px 4px rgba(35, 116, 89, 0.12);
+}
+
+.day-status-pill.status-holiday {
+  background: var(--accent-gold-soft);
+  color: var(--accent-gold-dark);
+  border: 1px solid var(--accent-gold-border);
+  box-shadow: 0 1px 4px rgba(188, 141, 75, 0.14);
+}
+
+.day-status-pill.status-absent {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border: 1px solid var(--bad-border);
+  box-shadow: 0 1px 4px rgba(181, 72, 58, 0.12);
+}
+
+.day-status-pill.status-partial {
+  background: rgba(188, 141, 75, 0.14);
+  color: #8C5E22;
+  border: 1px solid rgba(188, 141, 75, 0.35);
+  box-shadow: 0 1px 4px rgba(188, 141, 75, 0.12);
+}
+
+.day-status-pill.status-baseline {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+}
+
+.day-status-pill.status-unmarked {
+  background: var(--surface-alt);
+  color: var(--ink-muted);
+  border: 1px dashed var(--rule-strong);
+}
+
+.day-status-pill.status-empty {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+}
+
+.day-status-detail {
+  font-weight: 700;
+  opacity: 0.85;
+  font-size: 0.62rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  margin-left: 0.15rem;
 }
 
 .today-hero-subline {
