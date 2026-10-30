@@ -69,7 +69,7 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       const json = event.data.json();
-      data = { ...data, ...json };
+      data = { ...data, ...json, url: json.url || json.data?.url || data.url };
     } catch (e) {
       data.body = event.data.text() || data.body;
     }
@@ -81,8 +81,11 @@ self.addEventListener('push', (event) => {
     badge: '/favicon.svg',
     tag: data.tag || 'attendance-reminder',
     renotify: true,
+    silent: false,
+    vibrate: [180, 80, 180],
     requireInteraction: false,
     data: {
+      ...(data.data || {}),
       url: data.url || '/?tab=today'
     }
   };

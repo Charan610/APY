@@ -7,7 +7,11 @@ import {
   getNotificationPermission,
   isNative,
   scheduleNativeReminders,
-  sendNativeTestNotification
+  sendNativeTestNotification,
+  captureNativeReminderSession,
+  assertNativeReminderSession,
+  getNativeNotificationDiagnostics,
+  openNativeExactAlarmSettings
 } from '../notifications';
 import {
   Database,
@@ -89,6 +93,9 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
   // Reminders state
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(false);
+  const [nativeStatus, setNativeStatus] = useState(null);
+  const [schedulerStatus, setSchedulerStatus] = useState(null);
+  const [browserSubscriptionCount, setBrowserSubscriptionCount] = useState(null);
   const [vapidPublicKey, setVapidPublicKey] = useState('');
   const [selectedPrebuilts, setSelectedPrebuilts] = useState({
     '09:00': true,
@@ -169,7 +176,22 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
   const checkPerms = async () => {
     const p = await getNotificationPermission();
     setPermissionState(p);
+    if (isNative()) {
+      try { setNativeStatus(await getNativeNotificationDiagnostics()); }
+      catch (error) { setNativeStatus({ error: true, message: error.message }); }
+    }
   };
+
+  useEffect(() => {
+    if (!isOpen || !isNative()) return;
+    const refresh = () => { checkPerms(); };
+    window.addEventListener('apy_native_reminder_status', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('apy_native_reminder_status', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [isOpen]);
 
   const loadSections = async () => {
     try {
@@ -187,6 +209,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
       const config = await api.getNotificationConfig();
       setVapidPublicKey(config.vapid_public_key || '');
       setNotifEnabled(Boolean(config.enabled));
+      setSchedulerStatus(config.scheduler_status || null);
+      setBrowserSubscriptionCount(config.browser_subscription_count ?? null);
 
       const activeTimes = config.active_times || [];
       const prebuilts = { '09:00': false, '12:00': false, '16:30': false };
@@ -313,7 +337,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
   };
 
   // --- Reminders Handlers ---
-  const saveCurrentReminderPreferences = async (enabledStatus) => {
+  const saveCurrentReminderPreferences = async (enabledStatus, reminderSession = captureNativeReminderSession()) => {
     const timesToSave = [];
     if (selectedPrebuilts['09:00']) {
       timesToSave.push({ time_of_day: '09:00', label: 'Morning Check', is_prebuilt: true });
@@ -328,19 +352,19 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
       timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
     }
 
+    assertNativeReminderSession(reminderSession);
     await api.saveNotificationConfig({
       enabled: enabledStatus,
       times: timesToSave
     });
 
     if (isNative()) {
-      if (enabledStatus) {
-        await scheduleNativeReminders(timesToSave);
-      } else {
-        await scheduleNativeReminders([]);
-      }
+      try {
+        await scheduleNativeReminders(enabledStatus ? timesToSave : [], reminderSession);
+      } catch (error) { throw new Error(`Preferences saved on server; device schedule failed: ${error.message}`); }
     }
 
+    await checkPerms();
     return timesToSave;
   };
 
@@ -348,21 +372,23 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
     setError('');
     setMsg('');
     setNotifLoading(true);
+    const reminderSession = captureNativeReminderSession();
 
     try {
       if (newChecked) {
-        await requestNotificationPermissionAndSubscribe(vapidPublicKey);
+        const subscription = await requestNotificationPermissionAndSubscribe(vapidPublicKey);
+        if (!isNative()) await api.savePushSubscription(subscription);
         await checkPerms();
         setNotifEnabled(true);
-        await saveCurrentReminderPreferences(true);
-        setMsg(isNative() ? 'Android daily reminders activated! Alarms scheduled on your device.' : 'Daily attendance push alerts activated!');
+        await saveCurrentReminderPreferences(true, reminderSession);
+        setMsg(isNative() ? 'Daily reminders scheduled locally. Check device diagnostics below.' : 'Preferences saved. Background delivery depends on scheduler status below.');
       } else {
         setNotifEnabled(false);
-        await saveCurrentReminderPreferences(false);
+        await saveCurrentReminderPreferences(false, reminderSession);
         setMsg('Reminders paused.');
       }
     } catch (err) {
-      setNotifEnabled(!newChecked);
+      await loadNotificationConfig();
       setError(err.message || 'Could not update notification settings');
       await checkPerms();
     } finally {
@@ -392,7 +418,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
     setNotifLoading(true);
     try {
       await saveCurrentReminderPreferences(notifEnabled);
-      setMsg(isNative() ? 'Android notification alarms synchronized successfully!' : 'Reminder schedule saved successfully!');
+      setMsg(isNative() ? 'Device schedule saved. Check permission and channel diagnostics below.' : 'Preferences saved. Free background checks run about every 5 minutes and may be late.');
     } catch (err) {
       setError('Could not update reminder schedule: ' + (err.message || ''));
     } finally {
@@ -965,7 +991,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
                   </span>
                 </div>
                 <div style={{ fontSize: '0.725rem', color: 'var(--ink-soft)', marginTop: '0.15rem' }}>
-                  {notifEnabled ? 'Active · Push alarms trigger at your selected times' : 'Disabled · No reminder alerts will be sent'}
+                  {notifEnabled ? 'Reminders enabled in saved preferences · Delivery status below' : 'Reminders disabled in saved preferences'}
                 </div>
               </div>
 
@@ -980,6 +1006,35 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
               </label>
             </div>
 
+            <div role="status" style={{ fontSize: '0.78rem', lineHeight: 1.6, marginBottom: '1rem', color: 'var(--ink-soft)', overflowWrap: 'anywhere' }}>
+              {isNative() ? <>
+                <div>{nativeStatus?.message || 'Checking device schedule…'}</div>
+                <div>Notification permission: {nativeStatus?.display || permissionState}. Exact alarms: {nativeStatus?.exact || 'unknown'}.</div>
+                <div>{nativeStatus?.pending ?? 'Unknown'} saved reminder records. Android may delay alarms; a test does not verify daily delivery while asleep.</div>
+                {nativeStatus?.channelBlocked && <div style={{ color: 'var(--bad)' }}>The reminder channel is blocked in Android settings.</div>}
+                {nativeStatus?.channelSound === null && <div>The reminder channel sound is off in Android settings.</div>}
+                <div>APY chime uses the reminder channel. Sound and vibration remain subject to Android channel settings, volume and Do Not Disturb.</div>
+                {nativeStatus?.exact === 'denied' && <button type="button" className="btn btn-secondary" disabled={notifLoading}
+                  onClick={async () => {
+                    setNotifLoading(true); setError('');
+                    try { setNativeStatus(await openNativeExactAlarmSettings()); }
+                    catch (error) { setError(error.message); }
+                    finally { await checkPerms(); setNotifLoading(false); }
+                  }}>Open exact alarm settings</button>}
+              </> : <>
+                <div>{!schedulerStatus?.configured ? 'Background scheduler is not configured or has not been confirmed.'
+                  : schedulerStatus.late ? 'Background scheduler is delayed. Reminders may arrive late.'
+                  : schedulerStatus.last_success_at ? 'Background scheduler has reported a successful check.'
+                  : 'Background scheduler is configured; awaiting a successful check.'}</div>
+                <div>Free GitHub Actions checks run about every {schedulerStatus?.interval_minutes || 5} minutes and can be delayed. Delivery is best effort.</div>
+                {schedulerStatus?.last_error && <div>A scheduler error was reported. Delivery may be delayed until a successful check.</div>}
+                {schedulerStatus?.last_run_at && <div>Last check: {schedulerStatus.last_run_at}</div>}
+                {schedulerStatus?.last_success_at && <div>Last successful check: {schedulerStatus.last_success_at}</div>}
+                {browserSubscriptionCount === 0 && <div>No browser subscriptions are registered for this account. Enable reminders or use Send Test to register this browser.</div>}
+                <div>Background browser sounds are controlled by your browser and system. Custom notification chimes are available in the Android app.</div>
+              </>}
+            </div>
+
             {/* Permission Alert */}
             {permissionState === 'denied' && (
               <div className="alert-callout error" style={{ marginBottom: '1rem', fontSize: '0.75rem' }}>
@@ -991,7 +1046,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
             {/* Prebuilt Time Options */}
             <div style={{ marginBottom: '1rem', opacity: notifEnabled ? 1 : 0.6 }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink)', marginBottom: '0.4rem' }}>
-                Prebuilt Reminder Times (IST)
+                Prebuilt Reminder Times {isNative() ? '(device local time)' : '(IST)'}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <label style={{

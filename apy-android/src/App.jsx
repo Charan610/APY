@@ -9,7 +9,8 @@ import ForecastTab from './components/ForecastTab';
 import OfflineBanner from './components/OfflineBanner';
 import LiquidNavbar from './components/LiquidNavbar';
 import AppLaunchExperience from './components/AppLaunchExperience';
-import { registerServiceWorker } from './notifications';
+import { registerServiceWorker, isNative, clearNativeReminders } from './notifications';
+import { startNativeReminderLifecycle } from './nativeReminderLifecycle';
 import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
 import BrandLogo from './components/BrandLogo';
 
@@ -82,6 +83,8 @@ export default function App() {
     }
   });
 
+  useEffect(() => startNativeReminderLifecycle(), [user?.id, user?.register_number]);
+
   // Respect OS reduced-motion accessibility preference
   useEffect(() => {
     const isReduced = typeof window !== 'undefined' && 
@@ -132,6 +135,7 @@ export default function App() {
 
     // Listen for auth expiration events
     const handleAuthExpired = () => {
+      clearNativeReminders().catch(error => console.warn('Reminder cleanup:', error.message));
       setUser(null);
       setAuthToken(null);
       setStoredUser(null);
@@ -142,7 +146,7 @@ export default function App() {
 
   // 3. Live in-app reminder scheduler for active browser tabs & PWAs
   useEffect(() => {
-    if (!user) return;
+    if (!user || isNative()) return;
     const firedMinutes = new Set();
 
     const checkReminders = async () => {
@@ -290,6 +294,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    clearNativeReminders().catch(error => console.warn('Reminder cleanup:', error.message));
     try {
       api.logout();
     } catch {}

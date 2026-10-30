@@ -1,7 +1,7 @@
-import { api } from './api';
+import { api, getStoredUser, getAuthToken } from './api';
+import { createReminderController, REMINDER_CHANNEL, UPDATE_CHANNEL, ownsReminder } from './nativeReminders';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { PushNotifications } from '@capacitor/push-notifications';
 
 export function isNative() {
   return Capacitor.isNativePlatform();
@@ -52,9 +52,7 @@ export async function registerServiceWorker() {
 
 export async function unsubscribeFromPush() {
   if (isNative()) {
-    try {
-      await LocalNotifications.removeAllPendingNotifications();
-    } catch (e) {}
+    await clearNativeReminders();
     return 'android-native';
   }
   if (!isPushSupported()) return null;
@@ -94,29 +92,31 @@ export async function initNotificationChannel() {
   if (!isNative()) return;
   try {
     await LocalNotifications.createChannel({
-      id: 'apy_attendance_reminders',
+      id: REMINDER_CHANNEL,
       name: 'Attendance Reminders',
       description: 'Daily alerts to log attendance and stay above 75%',
       importance: 5, // High / Max
       visibility: 1, // Public
-      sound: 'default',
+      sound: 'apy_reminder.wav',
       vibration: true,
       lights: true,
       lightColor: '#D97706'
     });
     await LocalNotifications.createChannel({
-      id: 'apy_app_updates',
+      id: UPDATE_CHANNEL,
       name: 'App Updates',
       description: 'Alerts when a new version of the APY APK is available to install',
       importance: 5, // High / Max
       visibility: 1, // Public
-      sound: 'default',
+      sound: 'apy_reminder.wav',
       vibration: true,
       lights: true,
       lightColor: '#2563EB'
     });
   } catch (e) {
-    console.warn('Channel creation notice:', e);
+    // Android 23–25 has per-notification sound, without channel APIs.
+    if (e.code === 'UNAVAILABLE') return;
+    throw new Error(`Could not initialize notification channels: ${e.message}`);
   }
 }
 
@@ -138,9 +138,9 @@ export async function pushNativeUpdateNotification(updateInfo) {
           id: 9901,
           title: `🚀 APY Update Available (v${version})`,
           body: `A new version of APY is ready to install! Tap here to download and update now.`,
-          channelId: 'apy_app_updates',
+          channelId: UPDATE_CHANNEL,
           schedule: { at: new Date(Date.now() + 800) },
-          sound: 'default',
+          sound: 'apy_reminder.wav',
           actionTypeId: 'OPEN_UPDATE',
           extra: {
             type: 'apk_update',
@@ -161,12 +161,16 @@ export async function pushNativeUpdateNotification(updateInfo) {
 
 export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) {
   if (isNative()) {
+    const reminderSession = captureNativeReminderSession();
     try {
       const perm = await LocalNotifications.requestPermissions();
       if (perm.display !== 'granted') {
         throw new Error('Notification permission was not granted on your device. Please allow notifications in Android Settings for APY.');
       }
       await initNotificationChannel();
+      assertNativeReminderSession(reminderSession);
+      // Local alarms need no remote push registration. Keep compatibility with
+      // the existing backend, which requires real browser subscription keys.
       return { endpoint: 'android-native', keys: {} };
     } catch (err) {
       throw err;
@@ -221,60 +225,95 @@ export async function requestNotificationPermissionAndSubscribe(vapidPublicKey) 
   }
 }
 
-export async function scheduleNativeReminders(timesList = []) {
-  if (!isNative()) return;
-  try {
+let reminderDiagnostic = { message: 'Device schedule has not been checked yet.' };
+const notifyDiagnostic = diagnostic => {
+  reminderDiagnostic = diagnostic;
+  window.dispatchEvent(new CustomEvent('apy_native_reminder_status'));
+};
+const reminderController = createReminderController({
+  plugin: LocalNotifications,
+  initChannels: async () => {
+    const permission = await LocalNotifications.checkPermissions();
+    if (permission.display !== 'granted') throw new Error('Notifications are blocked in Android settings.');
     await initNotificationChannel();
-    
-    // Cancel all previously scheduled APY alarms
-    const pending = await LocalNotifications.getPending();
-    if (pending?.notifications?.length) {
-      await LocalNotifications.cancel({
-        notifications: pending.notifications.map(n => ({ id: n.id }))
-      });
-    }
-
-    if (!timesList || timesList.length === 0) return;
-
-    const notificationsToSchedule = [];
-    let idCounter = 100;
-
-    for (const item of timesList) {
-      const [hourStr, minStr] = item.time_of_day.split(':');
-      const hour = parseInt(hourStr, 10);
-      const minute = parseInt(minStr, 10);
-      if (isNaN(hour) || isNaN(minute)) continue;
-
-      idCounter += 1;
-      const label = item.label || (hour < 12 ? 'Morning Check' : hour < 15 ? 'Midday Check' : 'End of Day');
-
-      notificationsToSchedule.push({
-        id: idCounter,
-        title: `🎓 APY: ${label}`,
-        body: `Time to mark your class periods! Tap to record attendance and protect your 75% target.`,
-        channelId: 'apy_attendance_reminders',
-        schedule: {
-          on: {
-            hour: hour,
-            minute: minute
-          },
-          allowWhileIdle: true
-        },
-        sound: 'default',
-        extra: {
-          time: item.time_of_day,
-          type: 'attendance_reminder'
-        }
-      });
-    }
-
-    if (notificationsToSchedule.length > 0) {
-      await LocalNotifications.schedule({ notifications: notificationsToSchedule });
-      console.log(`Scheduled ${notificationsToSchedule.length} native attendance reminder alarms on Android!`);
-    }
-  } catch (err) {
-    console.error('Error scheduling native reminders:', err);
+  },
+  storage: {
+    getItem: key => localStorage.getItem(key),
+    setItem: (key, value) => localStorage.setItem(key, value)
+  },
+  fetchConfig: () => api.getNotificationConfig(),
+  isSessionCurrent: ticket => {
+    const current = captureNativeReminderSession();
+    return current?.account === ticket.account && current?.token === ticket.session;
   }
+});
+export function captureNativeReminderSession() {
+  if (!isNative()) return null;
+  const user = getStoredUser();
+  const account = user?.id ?? user?.register_number;
+  return { account: account == null ? null : String(account), token: getAuthToken() };
+}
+export function assertNativeReminderSession(expected) {
+  if (!isNative()) return;
+  const current = captureNativeReminderSession();
+  if (current.account !== expected?.account || current.token !== expected?.token) {
+    throw new Error('Reminder session changed; please retry.');
+  }
+}
+function syncReminderSession() {
+  const session = captureNativeReminderSession();
+  reminderController.setSession(session?.account ?? null, session?.token ?? null);
+  return session;
+}
+async function reportNativeOperation(operation) {
+  try {
+    const result = await operation();
+    if (result) notifyDiagnostic({ message: `${result.scheduled} daily reminder(s) scheduled on this device.`, scheduled: result.scheduled });
+    return result;
+  } catch (error) {
+    notifyDiagnostic({ message: error.message, error: true });
+    throw error;
+  }
+}
+export async function scheduleNativeReminders(timesList = [], expectedSession = captureNativeReminderSession()) {
+  if (!isNative()) return;
+  const session = syncReminderSession();
+  if (session.account !== expectedSession?.account || session.token !== expectedSession?.token) {
+    throw new Error('Reminder session changed; please retry.');
+  }
+  return reportNativeOperation(() => reminderController.save({ enabled: timesList.length > 0, active_times: timesList }));
+}
+export async function reconcileNativeReminders() {
+  if (!isNative()) return;
+  syncReminderSession();
+  return reportNativeOperation(() => reminderController.reconcile());
+}
+export async function clearNativeReminders() {
+  if (!isNative()) return;
+  // Invalidate immediately, before any queued device operation can finish.
+  reminderController.setSession(null, null);
+  return reportNativeOperation(async () => { await reminderController.clear(); return { scheduled: 0 }; });
+}
+export async function getNativeNotificationDiagnostics() {
+  if (!isNative()) return null;
+  const [permission, exact, channels, pending] = await Promise.all([
+    LocalNotifications.checkPermissions(), LocalNotifications.checkExactNotificationSetting(),
+    LocalNotifications.listChannels().catch(error => {
+      if (error.code === 'UNAVAILABLE') return { channels: [] };
+      throw error;
+    }), LocalNotifications.getPending()
+  ]);
+  const channel = channels.channels.find(c => c.id === REMINDER_CHANNEL);
+  return { ...reminderDiagnostic, display: permission.display, exact: exact.exact_alarm,
+    channelBlocked: channel?.importance === 0, channelSound: channel?.sound,
+    pending: pending.notifications.filter(ownsReminder).length };
+}
+export async function openNativeExactAlarmSettings() {
+  if (!isNative()) return;
+  // Only called by an explicit settings button; launch/resume never prompts.
+  await LocalNotifications.changeExactNotificationSetting();
+  await reconcileNativeReminders();
+  return getNativeNotificationDiagnostics();
 }
 
 export async function sendNativeTestNotification() {
@@ -287,18 +326,18 @@ export async function sendNativeTestNotification() {
           {
             id: testId,
             title: '🎓 APY Test Notification',
-            body: '🔔 Push & local notifications are working perfectly on your Android device!',
-            channelId: 'apy_attendance_reminders',
+            body: 'APY local test notification. Daily reminders are checked separately.',
+            channelId: REMINDER_CHANNEL,
             schedule: {
               at: new Date(Date.now() + 800), // Fire in 0.8 seconds
               allowWhileIdle: true
             },
-            sound: 'default',
+            sound: 'apy_reminder.wav',
             actionTypeId: 'OPEN_APP'
           }
         ]
       });
-      return { status: 'success', message: 'Test notification triggered on your phone!' };
+      return { status: 'success', message: 'Local test scheduled. This does not verify daily reminders while your phone sleeps.' };
     } catch (e) {
       throw new Error(`Android native notification failed: ${e.message}`);
     }
@@ -309,14 +348,7 @@ export async function sendNativeTestNotification() {
 }
 
 export async function ensureActivePushSubscription(vapidPublicKey) {
-  if (isNative()) {
-    const perm = await LocalNotifications.requestPermissions();
-    if (perm.display !== 'granted') {
-      throw new Error('Notification permission is disabled in Android settings for APY.');
-    }
-    await initNotificationChannel();
-    return { endpoint: 'android-native', keys: {} };
-  }
+  if (isNative()) return requestNotificationPermissionAndSubscribe();
 
   // Web Browser
   if (!isPushSupported()) {

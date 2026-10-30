@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { requestNotificationPermissionAndSubscribe, isPushSupported, isNative, scheduleNativeReminders } from '../notifications';
+import { requestNotificationPermissionAndSubscribe, isPushSupported, isNative, scheduleNativeReminders, captureNativeReminderSession } from '../notifications';
 import { Bell, Clock, Check, X, Sparkles, Plus, Trash2, AlertCircle } from 'lucide-react';
 
 export default function NotificationPromptModal({ isOpen, onClose, onConfigUpdated }) {
@@ -119,13 +119,15 @@ function formatTime12h(timeStr) {
         timesToSave.push({ time_of_day: ct, label: 'Custom Reminder', is_prebuilt: false });
       }
 
+      const reminderSession = captureNativeReminderSession();
       await api.saveNotificationConfig({
         enabled: true,
         times: timesToSave
       });
 
       if (isNative()) {
-        await scheduleNativeReminders(timesToSave);
+        try { await scheduleNativeReminders(timesToSave, reminderSession); }
+        catch (error) { throw new Error(`Preferences saved on server; device schedule failed: ${error.message}`); }
       }
 
       try {
@@ -190,7 +192,7 @@ function formatTime12h(timeStr) {
               Daily Attendance Reminders
             </h3>
             <p style={{ fontSize: '0.825rem', color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: '1.25rem' }}>
-              Never lose your attendance streak! Would you like a daily browser reminder to mark your periods on time?
+              {isNative() ? 'Schedule daily reminders on this device with the APY chime. Android permissions, sound settings and Do Not Disturb affect delivery.' : 'Enable daily browser reminders. Free background checks run about every 5 minutes and may be delayed. Background sounds are controlled by your browser and system.'}
             </p>
 
             <div style={{
@@ -203,7 +205,7 @@ function formatTime12h(timeStr) {
               color: 'var(--ink-soft)'
             }}>
               <div style={{ fontWeight: 600, color: 'var(--ink)', marginBottom: '0.35rem' }}>
-                ⏰ Default Recommended Times (IST):
+                ⏰ Recommended times {isNative() ? '(device local time)' : '(IST)'}:
               </div>
               <ul style={{ margin: '0 0 0 1.1rem', padding: 0 }}>
                 <li><strong>9:00 AM</strong> — Morning class check</li>

@@ -41,9 +41,9 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   // APK Updates & Push Broadcast State
   const [broadcasts, setBroadcasts] = useState([]);
   const [broadcastsLoading, setBroadcastsLoading] = useState(false);
-  const [broadcastVersion, setBroadcastVersion] = useState('1.4.7');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.7/APY.apk');
-  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.7 adds date-specific extra classes with period counts, morning or afternoon sessions, and attendance controls.');
+  const [broadcastVersion, setBroadcastVersion] = useState('1.4.8');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.8/APY.apk');
+  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.8 fixes daily Android reminders, restores alarms on app resume, and adds a distinct APY notification chime.');
   const [broadcasting, setBroadcasting] = useState(false);
   
   const [error, setError] = useState('');
