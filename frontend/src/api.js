@@ -186,6 +186,24 @@ export const api = {
     return request(`/sections/${sectionId}/timetable`, { method: 'PUT', body: JSON.stringify(payload) });
   },
 
+  // Date-specific extras use confirmed writes, independently of regular logs.
+  getExtraClasses: (start, end) => request(`/attendance/extra-classes?${new URLSearchParams({ start_date: start, end_date: end })}`),
+  addExtraClass: async (payload) => {
+    const result = await request('/attendance/extra-classes', { method: 'POST', body: JSON.stringify(payload) });
+    apiCache.invalidate();
+    return result;
+  },
+  updateExtraClass: async (id, payload) => {
+    const result = await request(`/attendance/extra-classes/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payload) });
+    apiCache.invalidate();
+    return result;
+  },
+  deleteExtraClass: async (id) => {
+    const result = await request(`/attendance/extra-classes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    apiCache.invalidate();
+    return result;
+  },
+
   // Attendance
   getLogs: async (startDate = '', endDate = '', forceRefresh = false) => {
     const cacheKey = `logs_${startDate}_${endDate}`;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api';
+import { localDate } from '../utils/localDate';
 import {
   Sparkles,
   TrendingUp,
@@ -25,7 +26,7 @@ export default function ForecastTab({ user }) {
   const [viewMode, setViewMode] = useState('continuous');
 
   // Single-day snapshot state (existing FAT functionality)
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => localDate());
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +34,9 @@ export default function ForecastTab({ user }) {
   // Continuous multi-day forecast state
   const [summary, setSummary] = useState(null);
   const [timetableByDay, setTimetableByDay] = useState({});
+  const [extraClasses, setExtraClasses] = useState([]);
+  const [continuousError, setContinuousError] = useState('');
+  const [continuousReload, setContinuousReload] = useState(0);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -51,7 +55,7 @@ export default function ForecastTab({ user }) {
       const d = new Date();
       d.setDate(d.getDate() + i);
       return {
-        dateStr: d.toISOString().split('T')[0],
+        dateStr: localDate(d),
         dayName: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()],
         dayNum: d.getDate(),
         isToday: i === 0,
@@ -62,8 +66,10 @@ export default function ForecastTab({ user }) {
 
   // Fetch summary and timetable data on mount
   useEffect(() => {
-    loadContinuousData();
-  }, [user?.section_id]);
+    let active = true;
+    loadContinuousData(() => active);
+    return () => { active = false; };
+  }, [user?.id, user?.section_id, continuousReload]);
 
   // Load single-day snapshot data when date changes or snapshot view is opened
   useEffect(() => {
@@ -72,13 +78,21 @@ export default function ForecastTab({ user }) {
     }
   }, [viewMode, selectedDate]);
 
-  const loadContinuousData = async () => {
+  const loadContinuousData = async (isActive) => {
     setDataLoading(true);
     try {
-      const [sumRes, ttRes] = await Promise.all([
-        api.getSummary().catch(() => null),
-        user?.section_id ? api.getSectionTimetable(user.section_id).catch(() => null) : Promise.resolve(null)
+      setContinuousError('');
+      const start = new Date();
+      start.setDate(start.getDate() + 1);
+      const end = new Date();
+      end.setDate(end.getDate() + FORECAST_HORIZON_DAYS);
+      const [sumRes, ttRes, extrasRes] = await Promise.all([
+        api.getSummary(),
+        user?.section_id ? api.getSectionTimetable(user.section_id) : Promise.resolve(null),
+        api.getExtraClasses(localDate(start), localDate(end))
       ]);
+      if (!isActive()) return;
+      setExtraClasses(extrasRes.extra_classes || Object.values(extrasRes.extra_classes_by_date || {}).flat());
 
       if (sumRes) {
         setSummary(sumRes);
@@ -92,9 +106,9 @@ export default function ForecastTab({ user }) {
         setTimetableByDay(ttRes.timetable_by_day);
       }
     } catch (err) {
-      console.error('Failed to load forecast base data:', err);
+      if (isActive()) setContinuousError(err.message || 'Could not load forecast data.');
     } finally {
-      setDataLoading(false);
+      if (isActive()) setDataLoading(false);
     }
   };
 
@@ -126,9 +140,10 @@ export default function ForecastTab({ user }) {
         }
       });
     }
+    extraClasses.forEach(record => set.add(record.subject));
     const list = Array.from(set);
     return [{ key: 'OVERALL', name: 'Overall Aggregate', isOverall: true }, ...list.map((s) => ({ key: s, name: s, isOverall: false }))];
-  }, [summary, timetableByDay]);
+  }, [summary, timetableByDay, extraClasses]);
 
   // Current attendance statistics for the selected subject
   const currentStats = useMemo(() => {
@@ -165,7 +180,7 @@ export default function ForecastTab({ user }) {
     for (let i = 1; i <= FORECAST_HORIZON_DAYS; i++) {
       const d = new Date();
       d.setDate(d.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = localDate(d);
       const weekday = d.getDay();
       const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -182,6 +197,12 @@ export default function ForecastTab({ user }) {
         }
       }
 
+      const plannedPeriods = extraClasses
+        .filter(record => record.log_date === dateStr && record.status === 'unmarked' &&
+          (!selectedSubject || selectedSubject === 'OVERALL' || record.subject.toLowerCase() === selectedSubject.toLowerCase()))
+        .reduce((sum, record) => sum + record.periods, 0);
+      periods += plannedPeriods;
+
       days.push({
         index: i,
         dateStr,
@@ -190,14 +211,14 @@ export default function ForecastTab({ user }) {
         shortDay: dayNames[weekday].slice(0, 3),
         formattedDate,
         isToday: false,
-        isSunday: weekday === 0,
+        isSunday: weekday === 0 && plannedPeriods === 0,
         periods,
         weekday
       });
     }
 
     return days;
-  }, [timetableByDay, selectedSubject]);
+  }, [timetableByDay, selectedSubject, extraClasses]);
 
   // Compute continuous multi-day projections sequentially across all days
   const multiDayProjections = useMemo(() => {
@@ -425,6 +446,8 @@ export default function ForecastTab({ user }) {
       {/* ========================================================= */}
       {viewMode === 'continuous' && (
         <div>
+          {dataLoading && <p role="status">Loading forecast and planned extra classes…</p>}
+          {continuousError && <div className="alert-callout error" role="alert">{continuousError}<button type="button" className="btn btn-secondary" onClick={() => setContinuousReload(value => value + 1)}>Retry forecast</button></div>}
           {/* Dynamic Subject Selector Pills */}
           <div className="subject-pills-container">
             {subjectList.map((subj) => {
@@ -453,7 +476,7 @@ export default function ForecastTab({ user }) {
           </div>
 
           {/* Current vs 14-Day Projected Hero Comparison Card */}
-          {finalProjection && (
+          {!dataLoading && !continuousError && finalProjection && (
             <div className="forecast-hero-comparison">
               <div className="hero-stat-col">
                 <span className="hero-stat-label">Current State</span>
@@ -523,7 +546,7 @@ export default function ForecastTab({ user }) {
 
           {/* Sequential 14-Day Trajectory */}
           <div className="forecast-timeline">
-            {multiDayProjections.map((day) => {
+            {!dataLoading && !continuousError && multiDayProjections.map((day) => {
               if (!day.hasClasses || day.isSunday) {
                 return (
                   <div key={day.dateStr} className="forecast-rest-day">

@@ -86,6 +86,12 @@ Download and install the pre-compiled **APY APK** directly on your Android phone
   - Active platform adoption badges (`🌐 Web`, `📱 Android`, `🍏 iOS`) with recent session activity.
 - Generates cryptographically secure 4-digit temporary reset PINs logged in an immutable audit ledger (`pin_reset_log`).
 
+### Date-specific extra classes (v1.4.7)
+- Use **+ Add extra class** below the regular subjects on web and Android.
+- Add multiple subjects with 1–10 periods and an optional morning or afternoon session; mark each Present or Absent, edit it, or remove it.
+- Use **Choose any date** for past or future extra classes, including Sundays. Historical baseline dates stay locked; regular attendance keeps its existing seven-day edit window.
+- Planned classes start unmarked. Marked periods update subject and overall attendance, forecasts, CSV export, and account data export without changing the weekly timetable.
+
 ### 7. 🔔 PWA & Mobile Native Experience
 - Built on **Capacitor 7** targeting Android with native hardware back-button handling, tactile haptics on attendance marking, dark collegiate theme, and persistent biometric/native token storage.
 - Inline Server Settings drawer on login screen for testing and configuring backend endpoints.
@@ -142,6 +148,9 @@ cd ../frontend
 npm install
 npm run dev
 ```
+
+### Isolated local review
+Run `backend/venv/bin/python scripts/run_local_preview.py` from the repository root and `npm run dev -- --host 127.0.0.1` inside `frontend/`. Open `http://127.0.0.1:5173` and sign in as `LOCALREVIEW` with PIN `1234`. This runner uses a separate local SQLite database and disables cloud access and scheduled reminders.
 
 ### 2. Android App (Capacitor + Gradle)
 ```bash

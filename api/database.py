@@ -248,6 +248,31 @@ def get_turso_connection() -> TursoConnection:
     return _turso_connection
 
 _local_schema_initialized = False
+_extra_classes_schema_initialized = False
+
+
+def ensure_extra_classes_schema(conn):
+    """Add date-specific classes to existing local and serverless databases."""
+    global _extra_classes_schema_initialized
+    if _extra_classes_schema_initialized:
+        return
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS extra_classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            log_date TEXT NOT NULL,
+            subject TEXT NOT NULL CHECK(length(trim(subject)) BETWEEN 1 AND 100),
+            periods INTEGER NOT NULL CHECK(periods BETWEEN 1 AND 10),
+            session TEXT NOT NULL DEFAULT 'unspecified'
+                CHECK(session IN ('unspecified', 'morning', 'afternoon')),
+            status TEXT NOT NULL DEFAULT 'unmarked'
+                CHECK(status IN ('unmarked', 'present', 'absent', 'holiday')),
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_extra_classes_user_date ON extra_classes(user_id, log_date)")
+    _extra_classes_schema_initialized = True
 
 def get_db_connection():
     global _local_schema_initialized
@@ -259,6 +284,7 @@ def get_db_connection():
                 init_db()
             except Exception as e:
                 logger.warning(f"Turso auto-init schema notice: {e}")
+        ensure_extra_classes_schema(conn)
         return conn
     else:
         conn = sqlite3.connect(DB_PATH, timeout=20.0, check_same_thread=False)
@@ -284,6 +310,7 @@ def get_db_connection():
             except Exception as e:
                 logger.warning(f"Auto-init DB check notice: {e}")
                 
+        ensure_extra_classes_schema(conn)
         return conn
 
 @contextmanager

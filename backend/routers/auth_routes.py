@@ -366,6 +366,9 @@ def get_my_data(current_user: dict = Depends(get_current_user)):
         )
         logs = [dict(r) for r in cursor.fetchall()]
 
+        cursor.execute("SELECT id, log_date, subject, periods, session, status, updated_at FROM extra_classes WHERE user_id = ? ORDER BY log_date DESC, id", (user_id,))
+        extra_classes = [dict(row) for row in cursor.fetchall()]
+
         # 3. Notification preferences & times
         cursor.execute("SELECT enabled, created_at, updated_at FROM notification_preferences WHERE user_id = ?", (user_id,))
         pref = cursor.fetchone()
@@ -383,6 +386,8 @@ def get_my_data(current_user: dict = Depends(get_current_user)):
             "profile": dict(user_row) if user_row else {},
             "daily_logs": logs,
             "daily_logs_count": len(logs),
+            "extra_classes": extra_classes,
+            "extra_classes_count": len(extra_classes),
             "notification_preferences": dict(pref) if pref else {"enabled": False},
             "notification_schedules": times,
             "login_sessions": sessions

@@ -3,10 +3,10 @@ import csv
 import io
 import time
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from database import get_db
 from auth import get_current_user
 
@@ -43,6 +43,129 @@ class MarkAttendanceItem(BaseModel):
 class MarkAttendanceRequest(BaseModel):
     log_date: str = Field(..., pattern="^\\d{4}-\\d{2}-\\d{2}$") # YYYY-MM-DD
     entries: List[MarkAttendanceItem]
+
+
+class ExtraClassDetails(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=100)
+    periods: int = Field(..., ge=1, le=10, strict=True)
+    session: Literal['unspecified', 'morning', 'afternoon'] = 'unspecified'
+    status: Literal['unmarked', 'present', 'absent', 'holiday'] = 'unmarked'
+
+    @field_validator('subject')
+    @classmethod
+    def clean_subject(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError('Enter a subject name.')
+        return value
+
+
+class AddExtraClassRequest(ExtraClassDetails):
+    log_date: str = Field(..., pattern=r'^\d{4}-\d{2}-\d{2}$')
+
+
+def parse_extra_class_date(value: str) -> date:
+    try:
+        parsed = date.fromisoformat(value)
+        if parsed.isoformat() != value:
+            raise ValueError()
+        return parsed
+    except ValueError:
+        raise HTTPException(status_code=400, detail='Enter a valid date in YYYY-MM-DD format.')
+
+
+def validate_extra_class_date(value: str, current_user: dict):
+    parsed = parse_extra_class_date(value)
+    baseline = current_user.get('baseline_date')
+    if baseline and parsed <= parse_extra_class_date(baseline):
+        raise HTTPException(status_code=400, detail='This date is included in your historical baseline. Add extra classes after the baseline cutoff.')
+    return parsed
+
+
+def canonical_extra_subject(cursor, subject: str, current_user: dict) -> str:
+    # Keep existing spelling so a class joins the correct subject's totals.
+    cursor.execute("""
+        SELECT subject FROM timetable_blocks
+        WHERE section_id = ? AND lower(trim(subject)) = lower(?)
+        ORDER BY id LIMIT 1
+    """, (current_user['section_id'], subject))
+    existing = cursor.fetchone()
+    if not existing:
+        cursor.execute("""
+            SELECT subject FROM extra_classes
+            WHERE user_id = ? AND lower(subject) = lower(?) ORDER BY id LIMIT 1
+        """, (current_user['id'], subject))
+        existing = cursor.fetchone()
+    return existing['subject'] if existing else subject
+
+
+@router.get('/extra-classes')
+def list_extra_classes(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    today = get_today_ist()
+    start_date = start_date or (today - timedelta(days=30)).isoformat()
+    end_date = end_date or (today + timedelta(days=14)).isoformat()
+    if parse_extra_class_date(start_date) > parse_extra_class_date(end_date):
+        raise HTTPException(status_code=400, detail='Start date must be on or before end date.')
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM extra_classes WHERE user_id = ? AND log_date BETWEEN ? AND ? ORDER BY log_date, id',
+                       (current_user['id'], start_date, end_date))
+        records = [dict(row) for row in cursor.fetchall()]
+    grouped = {}
+    for record in records:
+        grouped.setdefault(record['log_date'], []).append(record)
+    return {'extra_classes': records, 'extra_classes_by_date': grouped}
+
+
+@router.post('/extra-classes')
+def add_extra_class(req: AddExtraClassRequest, current_user: dict = Depends(get_current_user)):
+    validate_extra_class_date(req.log_date, current_user)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        subject = canonical_extra_subject(cursor, req.subject, current_user)
+        cursor.execute('''
+            INSERT INTO extra_classes (user_id, log_date, subject, periods, session, status)
+            VALUES (?, ?, ?, ?, ?, ?) RETURNING *
+        ''', (current_user['id'], req.log_date, subject, req.periods, req.session, req.status))
+        record = dict(cursor.fetchone())
+        return {'extra_class': record, 'summary': compute_summary_for_user(conn, current_user)}
+
+
+def get_owned_extra_class(cursor, extra_id: int, current_user: dict) -> dict:
+    cursor.execute('SELECT * FROM extra_classes WHERE id = ? AND user_id = ?', (extra_id, current_user['id']))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail='Extra class not found.')
+    record = dict(row)
+    validate_extra_class_date(record['log_date'], current_user)
+    return record
+
+
+@router.put('/extra-classes/{extra_id}')
+def update_extra_class(extra_id: int, req: ExtraClassDetails, current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        get_owned_extra_class(cursor, extra_id, current_user)
+        subject = canonical_extra_subject(cursor, req.subject, current_user)
+        cursor.execute('''
+            UPDATE extra_classes SET subject = ?, periods = ?, session = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ? RETURNING *
+        ''', (subject, req.periods, req.session, req.status, extra_id, current_user['id']))
+        record = dict(cursor.fetchone())
+        return {'extra_class': record, 'summary': compute_summary_for_user(conn, current_user)}
+
+
+@router.delete('/extra-classes/{extra_id}')
+def delete_extra_class(extra_id: int, current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        get_owned_extra_class(cursor, extra_id, current_user)
+        cursor.execute('DELETE FROM extra_classes WHERE id = ? AND user_id = ?', (extra_id, current_user['id']))
+        return {'status': 'success', 'summary': compute_summary_for_user(conn, current_user)}
 
 def validate_edit_window(log_date_str: str, baseline_date_str: Optional[str] = None):
     """
@@ -165,21 +288,28 @@ def compute_summary_for_user(conn, current_user: dict) -> dict:
     # High-performance DB-engine aggregation (GROUP BY subject)
     cursor.execute(
         """
-        SELECT 
-            b.subject,
-            COALESCE(SUM(CASE WHEN l.status = 'present' THEN b.periods ELSE 0 END), 0) AS attended,
-            COALESCE(SUM(CASE WHEN l.status IN ('present', 'absent') THEN b.periods ELSE 0 END), 0) AS total,
-            COALESCE(SUM(CASE WHEN l.status = 'holiday' THEN b.periods ELSE 0 END), 0) AS holiday_periods
-        FROM timetable_blocks b
-        LEFT JOIN daily_logs l 
-               ON b.id = l.block_id 
-              AND l.user_id = ? 
-              AND (l.log_date > ? OR ? IS NULL)
-        WHERE b.section_id = ?
-        GROUP BY b.subject
-        ORDER BY b.subject
+        WITH attendance_entries AS (
+            SELECT b.subject,
+                   CASE WHEN l.status = 'present' THEN b.periods ELSE 0 END AS attended,
+                   CASE WHEN l.status IN ('present', 'absent') THEN b.periods ELSE 0 END AS total,
+                   CASE WHEN l.status = 'holiday' THEN b.periods ELSE 0 END AS holiday_periods
+            FROM timetable_blocks b
+            LEFT JOIN daily_logs l ON b.id = l.block_id
+                  AND l.user_id = ? AND (l.log_date > ? OR ? IS NULL)
+            WHERE b.section_id = ?
+            UNION ALL
+            SELECT subject,
+                   CASE WHEN status = 'present' THEN periods ELSE 0 END,
+                   CASE WHEN status IN ('present', 'absent') THEN periods ELSE 0 END,
+                   CASE WHEN status = 'holiday' THEN periods ELSE 0 END
+            FROM extra_classes
+            WHERE user_id = ? AND (log_date > ? OR ? IS NULL)
+        )
+        SELECT subject, SUM(attended) AS attended, SUM(total) AS total,
+               SUM(holiday_periods) AS holiday_periods
+        FROM attendance_entries GROUP BY subject ORDER BY subject
         """,
-        (user_id, baseline_date, baseline_date, section_id)
+        (user_id, baseline_date, baseline_date, section_id, user_id, baseline_date, baseline_date)
     )
     rows = cursor.fetchall()
     
@@ -360,16 +490,6 @@ def forecast_attendance(
         
     weekday = (t_date.weekday() + 1) % 7 # Python weekday: Mon=0..Sun=6 -> DB weekday: Sun=0..Sat=6
     
-    if weekday == 0: # Sunday
-        return {
-            "target_date": target_date,
-            "weekday": 0,
-            "day_name": "Sunday",
-            "is_holiday": True,
-            "blocks": [],
-            "message": "Sunday is a fixed holiday. No timetable blocks."
-        }
-        
     summary = get_attendance_summary(current_user)
     current_overall_att = summary["overall"]["attended"]
     current_overall_tot = summary["overall"]["total"]
@@ -385,7 +505,15 @@ def forecast_attendance(
             """,
             (current_user["section_id"], weekday)
         )
-        blocks = cursor.fetchall()
+        blocks = [dict(row) for row in cursor.fetchall()]
+        cursor.execute('''
+            SELECT id, subject, periods, status, session FROM extra_classes
+            WHERE user_id = ? AND log_date = ? AND (log_date > ? OR ? IS NULL)
+            ORDER BY id
+        ''', (current_user['id'], target_date, current_user.get('baseline_date'), current_user.get('baseline_date')))
+        extra_blocks = [dict(row) for row in cursor.fetchall()]
+        for index, extra in enumerate(extra_blocks, start=len(blocks) + 1):
+            blocks.append({**extra, 'is_extra': True, 'order_index': index})
         
         forecast_blocks = []
         for b in blocks:
@@ -395,17 +523,27 @@ def forecast_attendance(
             subj_stat = summary["subjects"].get(subj, {"attended": 0, "total": 0})
             subj_att = subj_stat["attended"]
             subj_tot = subj_stat["total"]
+
+            # A marked extra is already in the summary. Simulate replacing its
+            # attendance rather than adding the same periods a second time.
+            counted = periods if b.get('status') in ('present', 'absent') else 0
+            attended = periods if b.get('status') == 'present' else 0
+            subj_att -= attended
+            subj_tot -= counted
+            overall_att = current_overall_att - attended
+            overall_tot = current_overall_tot - counted
             
             # Subject simulations
             subj_if_present = round(((subj_att + periods) / (subj_tot + periods)) * 100, 2) if (subj_tot + periods) > 0 else 0.0
             subj_if_absent = round((subj_att / (subj_tot + periods)) * 100, 2) if (subj_tot + periods) > 0 else 0.0
             
             # Overall simulations
-            overall_if_present = round(((current_overall_att + periods) / (current_overall_tot + periods)) * 100, 2) if (current_overall_tot + periods) > 0 else 0.0
-            overall_if_absent = round((current_overall_att / (current_overall_tot + periods)) * 100, 2) if (current_overall_tot + periods) > 0 else 0.0
+            overall_if_present = round(((overall_att + periods) / (overall_tot + periods)) * 100, 2) if (overall_tot + periods) > 0 else 0.0
+            overall_if_absent = round((overall_att / (overall_tot + periods)) * 100, 2) if (overall_tot + periods) > 0 else 0.0
             
             forecast_blocks.append({
-                "block_id": b["id"],
+                "block_id": f"extra-{b['id']}" if b.get('is_extra') else b['id'],
+                "is_extra": b.get('is_extra', False),
                 "subject": subj,
                 "periods": periods,
                 "order_index": b["order_index"],
@@ -422,7 +560,7 @@ def forecast_attendance(
             "target_date": target_date,
             "weekday": weekday,
             "day_name": day_names[weekday],
-            "is_holiday": False,
+            "is_holiday": weekday == 0 and not extra_blocks,
             "blocks": forecast_blocks
         }
 
@@ -481,13 +619,20 @@ def calculate_attendance_target(
             accumulated = 0
             check_date = get_today_ist()
             projected_date = None
+            cursor.execute('''
+                SELECT log_date, SUM(periods) AS day_periods FROM extra_classes
+                WHERE user_id = ? AND status = 'unmarked' AND log_date > ? AND log_date <= ?
+                  AND (log_date > ? OR ? IS NULL)
+                GROUP BY log_date
+            ''', (current_user['id'], check_date.isoformat(), (check_date + timedelta(days=90)).isoformat(),
+                  current_user.get('baseline_date'), current_user.get('baseline_date')))
+            extra_periods = {row['log_date']: row['day_periods'] for row in cursor.fetchall()}
 
             for _ in range(90):
                 check_date += timedelta(days=1)
                 db_weekday = (check_date.weekday() + 1) % 7
-                if db_weekday == 0:
-                    continue
-                day_periods = weekday_periods.get(db_weekday, 0)
+                day_periods = weekday_periods.get(db_weekday, 0) if db_weekday else 0
+                day_periods += extra_periods.get(check_date.isoformat(), 0)
                 if day_periods > 0:
                     accumulated += day_periods
                     if accumulated >= needed:
@@ -516,13 +661,19 @@ def export_attendance_csv(current_user: dict = Depends(get_current_user)):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT l.log_date, b.weekday, b.subject, b.periods, l.status, COALESCE(l.notes, '') as notes
+            SELECT l.log_date, b.weekday, b.subject, b.periods, l.status,
+                   COALESCE(l.notes, '') as notes, b.order_index AS sort_order, 0 AS is_extra
             FROM daily_logs l
             JOIN timetable_blocks b ON l.block_id = b.id
             WHERE l.user_id = ?
-            ORDER BY l.log_date DESC, b.order_index ASC
+            UNION ALL
+            SELECT log_date, CAST(strftime('%w', log_date) AS INTEGER), subject, periods, status,
+                   CASE WHEN session = 'unspecified' THEN 'Extra class'
+                        ELSE 'Extra class - ' || session END, id, 1
+            FROM extra_classes WHERE user_id = ?
+            ORDER BY log_date DESC, is_extra ASC, sort_order ASC
             """,
-            (user_id,)
+            (user_id, user_id)
         )
         rows = cursor.fetchall()
 

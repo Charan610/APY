@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../api';
+import ExtraClasses from './ExtraClasses';
+import { localDate, parseLocalDate } from '../utils/localDate';
 import { 
   Check, 
   X, 
@@ -72,7 +74,7 @@ export default function TodayTab({
   isWidgetVisible = true, 
   attendanceTargetRef 
 }) {
-  const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [currentDate, setCurrentDate] = useState(() => localDate());
   const [timetableByDay, setTimetableByDay] = useState(() => {
     try {
       const cached = localStorage.getItem(`apy_tt_cache_${user?.section_id || 1}`);
@@ -96,16 +98,16 @@ export default function TodayTab({
   const [showRemarkInput, setShowRemarkInput] = useState(false);
   const [pastAttendanceDrafts, setPastAttendanceDrafts] = useState({});
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localDate();
   const todayObj = new Date();
   
   const minDateObj = new Date();
   minDateObj.setDate(todayObj.getDate() - 7);
-  const minDateStr = minDateObj.toISOString().split('T')[0];
+  const minDateStr = localDate(minDateObj);
 
   const maxDateObj = new Date();
   maxDateObj.setDate(todayObj.getDate() + 7);
-  const maxDateStr = maxDateObj.toISOString().split('T')[0];
+  const maxDateStr = localDate(maxDateObj);
 
   const isCoveredByBaseline = Boolean(user?.baseline_date && currentDate <= user.baseline_date);
   const isPastDate = currentDate < todayStr;
@@ -215,7 +217,7 @@ export default function TodayTab({
     for (let i = -7; i <= 7; i++) {
       const d = new Date();
       d.setDate(todayObj.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
+      const iso = localDate(d);
       const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
       const isPastBaseline = Boolean(user?.baseline_date && iso <= user.baseline_date);
       const dayEntries = dailyLogs[iso] || [];
@@ -234,15 +236,15 @@ export default function TodayTab({
   };
 
   const shiftDate = (offset) => {
-    const cur = new Date(currentDate);
+    const cur = parseLocalDate(currentDate);
     cur.setDate(cur.getDate() + offset);
-    const iso = cur.toISOString().split('T')[0];
+    const iso = localDate(cur);
     setCurrentDate(iso);
     setFeedback('');
     setUndoAction(null);
   };
 
-  const currentWeekday = new Date(currentDate).getDay();
+  const currentWeekday = parseLocalDate(currentDate).getDay();
   const currentBlocks = timetableByDay[currentWeekday] || [];
   const isSunday = currentWeekday === 0;
 
@@ -726,7 +728,7 @@ export default function TodayTab({
   };
 
   const formattedDate = useMemo(() => {
-    const d = new Date(currentDate);
+    const d = parseLocalDate(currentDate);
     return {
       weekday: d.toLocaleDateString('en-US', { weekday: 'long' }),
       monthDay: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -751,6 +753,17 @@ export default function TodayTab({
             <span className={`ribbon-status-dot ${d.isSunday || d.isHoliday ? 'holiday' : d.isPastBaseline ? 'baseline' : d.hasLogs ? 'logged' : ''}`} />
           </button>
         ))}
+      </div>
+
+      <div className="extra-date-picker">
+        <label htmlFor="attendance-date">Choose any date</label>
+        <input id="attendance-date" type="date" value={currentDate} onChange={event => {
+          if (event.target.value) {
+            setCurrentDate(event.target.value);
+            setFeedback('');
+            setUndoAction(null);
+          }
+        }} />
       </div>
 
       {/* 2. Hero Date & Streak Card Banner */}
@@ -830,7 +843,7 @@ export default function TodayTab({
       ) : !isDateEditable ? (
         <div className="alert-callout error">
           <Lock size={16} />
-          <span>This date is outside the active 7-day schedule window. Editing is locked.</span>
+          <span>This date is outside the active 7-day schedule window. Regular attendance is locked. Extra classes below remain editable after your baseline.</span>
         </div>
       ) : null}
 
@@ -990,7 +1003,7 @@ export default function TodayTab({
             Sunday — College Holiday
           </h4>
           <p style={{ fontSize: '0.825rem', color: 'var(--ink-soft)', marginTop: '0.35rem' }}>
-            Sundays are fixed institutional holidays and are never factored into attendance totals.
+            No regular classes on Sunday. Date-specific extra classes can be recorded below.
           </p>
         </div>
       ) : currentBlocks.length === 0 ? (
@@ -1079,6 +1092,13 @@ export default function TodayTab({
           })}
         </div>
       )}
+      <ExtraClasses
+        key={`${user?.id}:${currentDate}`}
+        date={currentDate}
+        locked={isCoveredByBaseline}
+        subjects={[...new Set(Object.values(timetableByDay).flat().map(block => block.subject).filter(Boolean))]}
+        onAttendanceUpdated={onAttendanceUpdated}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import re
 from database import get_db
 from auth import get_current_user
 from notifications import (
@@ -230,12 +231,15 @@ class DeviceSyncRequest(BaseModel):
 def get_latest_apk_info():
     """Returns the latest APK release info and broadcast status."""
     latest = get_latest_apk_broadcast()
-    default_version = "1.4.6"
+    default_version = "1.4.7"
+    # A previous notification broadcast must not hide a newer published APK.
+    if latest and tuple(int(n) for n in re.findall(r'\d+', latest['version'])[:3]) < (1, 4, 7):
+        latest = None
     default_url = f"https://github.com/Charan610/APY/releases/download/v{default_version}/APY.apk"
     return {
         "version": latest["version"] if latest else default_version,
         "apk_url": latest["apk_url"] if latest else default_url,
-        "release_notes": latest["release_notes"] if latest else "Latest release with performance enhancements and offline resilience.",
+        "release_notes": latest["release_notes"] if latest else "Add date-specific extra classes, set periods and sessions, and mark attendance on web and Android.",
         "published_at": latest["created_at"] if latest else None
     }
 

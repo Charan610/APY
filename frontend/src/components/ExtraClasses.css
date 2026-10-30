@@ -1,0 +1,23 @@
+.extra-classes { margin-top: 1.25rem; }
+.extra-header, .extra-actions, .extra-confirm { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+.extra-header { justify-content: space-between; }
+.extra-detail { color: var(--ink-soft); font-size: .8rem; line-height: 1.5; margin: .4rem 0; }
+.extra-detail:empty { display: none; }
+.extra-list { display: grid; gap: .8rem; }
+.extra-record { border: 1px solid var(--rule); border-radius: var(--radius-md, 8px); padding: 1rem; background: var(--surface); }
+.extra-record-heading { display: flex; flex-direction: column; overflow-wrap: anywhere; margin-bottom: .5rem; }
+.extra-record-heading strong { color: var(--ink); font-family: var(--font-serif); }
+.extra-confirm { border-top: 1px solid var(--rule); margin-top: .8rem; padding-top: .6rem; }
+.extra-confirm p { flex-basis: 100%; overflow-wrap: anywhere; }
+.extra-form { margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--accent-gold); }
+.extra-form fieldset { border: 0; padding: 0; min-width: 0; }
+.extra-form label { display: block; font-size: .8rem; color: var(--ink); }
+.extra-form input, .extra-form select, .extra-date-picker input { display: block; width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; padding: .65rem; margin: .35rem 0 .75rem; color-scheme: light dark; }
+.extra-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .75rem; }
+.extra-classes button { min-height: 44px; }
+.extra-classes button:disabled { opacity: .5; cursor: not-allowed; }
+.extra-classes :focus-visible, .extra-date-picker :focus-visible { outline: 2px solid var(--accent-gold); outline-offset: 3px; }
+.extra-date-picker { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .7rem; color: var(--ink-soft); font-size: .85rem; margin-bottom: .75rem; }
+.extra-date-picker input { width: auto; max-width: 100%; margin: 0; }
+.extra-classes .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 420px) { .extra-record { padding: .75rem; } .extra-actions > button { flex: 1 1 auto; } .extra-date-picker { justify-content: space-between; } }
