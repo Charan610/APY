@@ -5,6 +5,7 @@ APY v1.4.9 — Glass theme and timetable improvements (build 13).
 - Replace the Android launcher icon with the website's ATT / PERY mark, including round and adaptive icons.
 - Fix invisible timetable text, keep period labels compact, and use responsive schedule columns.
 - Refine the opening logo and attendance animation with a brief, gentle heartbeat and theme-aware colors.
+- Clear stale update banners and badges after upgrading or receiving an up-to-date result.
 - Preserve real zero attendance values during the opening animation and honor reduced-motion preferences.
 
 The local theme comparison and Replay intro controls are development-only.

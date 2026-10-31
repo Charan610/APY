@@ -28,11 +28,31 @@ export function compareVersions(v1, v2) {
   return 0;
 }
 
+/** Reconcile stored notices with this build before the first render. */
+export function getCachedAppUpdate() {
+  try {
+    const data = JSON.parse(localStorage.getItem('apy_update_check_cache'))?.data;
+    const latest = data?.latestVersion || data?.tag;
+    if (!latest || !/^v?\d+\.\d+\.\d+$/i.test(latest)) {
+      localStorage.removeItem('apy_has_update_badge');
+      return null;
+    }
+    const hasUpdate = compareVersions(latest, CURRENT_APP_VERSION) > 0;
+    if (hasUpdate) localStorage.setItem('apy_has_update_badge', 'true');
+    else localStorage.removeItem('apy_has_update_badge');
+    return { ...data, currentVersion: CURRENT_APP_VERSION, hasUpdate, isUpToDate: !hasUpdate };
+  } catch {
+    try { localStorage.removeItem('apy_has_update_badge'); } catch { /* Storage may be unavailable. */ }
+    return null;
+  }
+}
+
 /**
  * Queries GitHub REST API for the latest published release of APY.
  * Silent and non-blocking with local caching and fast 3.5s timeout.
  */
 export async function checkForAppUpdate(force = false) {
+  const previous = getCachedAppUpdate();
   try {
     const cacheKey = 'apy_update_check_cache';
     const cached = localStorage.getItem(cacheKey);
@@ -43,7 +63,7 @@ export async function checkForAppUpdate(force = false) {
       try {
         const parsed = JSON.parse(cached);
         if (now - parsed.timestamp < 5 * 60 * 1000 && parsed.data && parsed.data.currentVersion === CURRENT_APP_VERSION) {
-          return parsed.data;
+          return previous;
         }
       } catch (e) {}
     }
@@ -117,9 +137,9 @@ export async function checkForAppUpdate(force = false) {
     }
 
     if (!releaseData) {
-      return {
+      return previous || {
         hasUpdate: false,
-        isUpToDate: true,
+        isUpToDate: false,
         currentVersion: CURRENT_APP_VERSION,
         latestVersion: CURRENT_APP_VERSION,
         releaseNotes: '',
@@ -155,7 +175,7 @@ export async function checkForAppUpdate(force = false) {
     return result;
   } catch (err) {
     console.warn('Update check note:', err);
-    return {
+    return previous || {
       hasUpdate: false,
       isUpToDate: true,
       error: err.message,

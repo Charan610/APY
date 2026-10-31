@@ -10,7 +10,7 @@ import OfflineBanner from './components/OfflineBanner';
 import LiquidNavbar from './components/LiquidNavbar';
 import AppLaunchExperience from './components/AppLaunchExperience';
 import { registerServiceWorker } from './notifications';
-import { checkForAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
+import { checkForAppUpdate, getCachedAppUpdate, installAppUpdate, CURRENT_APP_VERSION } from './updateChecker';
 import BrandLogo from './components/BrandLogo';
 
 const SettingsModal = lazy(() => import('./components/SettingsModal'));
@@ -19,21 +19,8 @@ const AdminModal = lazy(() => import('./components/AdminModal'));
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser());
-  const [hasUpdate, setHasUpdate] = useState(() => {
-    try {
-      return localStorage.getItem('apy_has_update_badge') === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [updateInfo, setUpdateInfo] = useState(() => {
-    try {
-      const cached = localStorage.getItem('apy_update_check_cache');
-      return cached ? JSON.parse(cached)?.data : null;
-    } catch {
-      return null;
-    }
-  });
+  const [hasUpdate, setHasUpdate] = useState(() => Boolean(getCachedAppUpdate()?.hasUpdate));
+  const [updateInfo, setUpdateInfo] = useState(() => getCachedAppUpdate());
   const [summary, setSummary] = useState(() => {
     try {
       const cached = localStorage.getItem('apy_summary_cache');
@@ -123,8 +110,8 @@ export default function App() {
 
     // 4. Silent, non-blocking update check
     checkForAppUpdate().then((res) => {
-      if (res?.hasUpdate) {
-        setHasUpdate(true);
+      if (res) {
+        setHasUpdate(Boolean(res.hasUpdate));
         setUpdateInfo(res);
       }
     }).catch(() => {});
