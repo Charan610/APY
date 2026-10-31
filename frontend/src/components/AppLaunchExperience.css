@@ -1,0 +1,43 @@
+.flight-logo-crest { border-radius: 22%; }
+.flight-logo-crest::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255,255,255,.28), transparent 48%);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.4), 0 8px 24px rgba(0,70,90,.14);
+  pointer-events: none;
+}
+.intro-attendance-hero {
+  padding: 22px 24px;
+  border: 1px solid var(--rule);
+  border-radius: 30px;
+  background: var(--surface);
+  box-shadow: 0 16px 50px rgba(0,44,65,.16);
+}
+.intro-attendance-hero .attendance-visual {
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--surface-soft), transparent 72%);
+}
+.intro-attendance-hero .attendance-percentage-val.is-heartbeating {
+  animation: launch-soft-heartbeat 800ms ease-in-out 1;
+}
+.intro-attendance-hero .heartbeat-wave-path {
+  stroke-dasharray: 140;
+  animation: launch-wave-reveal 900ms ease-out both;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent-gold) 35%, transparent));
+}
+@keyframes launch-soft-heartbeat {
+  0%, 40%, 100% { transform: scale(1); }
+  14% { transform: scale(1.045); }
+  27% { transform: scale(1); }
+  32% { transform: scale(1.025); }
+}
+@keyframes launch-wave-reveal {
+  from { stroke-dashoffset: 140; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-attendance-hero .attendance-percentage-val.is-heartbeating,
+  .intro-attendance-hero .heartbeat-wave-path { animation: none; }
+}

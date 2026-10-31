@@ -10,14 +10,14 @@
     "SplashScreen": {
       "launchShowDuration": 1500,
       "launchAutoHide": true,
-      "backgroundColor": "#fbf8f1",
+      "backgroundColor": "#057eaa",
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP",
       "showSpinner": false
     },
     "StatusBar": {
-      "style": "DARK",
-      "backgroundColor": "#fbf8f1"
+      "style": "LIGHT",
+      "backgroundColor": "#057eaa"
     }
   }
 }

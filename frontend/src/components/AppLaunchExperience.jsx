@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import BrandLogo from './BrandLogo';
+import './AppLaunchExperience.css';
 
 /**
  * Standard cubic-bezier solvers:
@@ -63,13 +64,12 @@ export default function AppLaunchExperience({
   });
 
   // Real attendance calculation computed BEFORE animation starts
-  const overall = summary?.overall || { percentage: 0, attended: 0, total: 0 };
-  let targetPct = Number(overall.percentage || 0);
-  if (targetPct === 0 && user?.baseline_total > 0) {
-    targetPct = Math.round((user.baseline_attended / user.baseline_total) * 1000) / 10;
-  }
-  const attendedCount = Number(overall.attended || user?.baseline_attended || 0);
-  const absentCount = Math.max(0, Number(overall.total || user?.baseline_total || 0) - attendedCount);
+  const overall = summary?.overall;
+  const baselinePct = user?.baseline_total > 0 ? user.baseline_attended / user.baseline_total * 100 : 0;
+  const percentage = Number(overall?.percentage ?? baselinePct);
+  const targetPct = Number.isFinite(percentage) ? Math.min(100, Math.max(0, percentage)) : 0;
+  const attendedCount = Number(overall?.attended ?? user?.baseline_attended ?? 0);
+  const absentCount = Math.max(0, Number(overall?.total ?? user?.baseline_total ?? 0) - attendedCount);
 
   const brandLandedTriggeredRef = useRef(false);
   const widgetRevealedTriggeredRef = useRef(false);
@@ -294,7 +294,7 @@ export default function AppLaunchExperience({
   // Real Attendance Calculation
   let countProgress = 0;
   if (elapsedMs >= 1450) {
-    const rawT = Math.min((elapsedMs - 1450) / 1100, 1);
+    const rawT = Math.min((elapsedMs - 1450) / 800, 1);
     countProgress = easeOutCubic(rawT);
   }
   const currentPct = targetPct * countProgress;
@@ -458,7 +458,7 @@ export default function AppLaunchExperience({
                 cx={ringSize / 2}
                 cy={ringSize / 2}
                 r={radius}
-                stroke="rgba(197, 160, 89, 0.22)"
+                stroke="var(--rule-strong)"
                 strokeWidth="4"
                 fill="none"
               />
@@ -502,7 +502,7 @@ export default function AppLaunchExperience({
               }}
             >
               <span
-                className={`font-serif attendance-percentage-val${elapsedMs >= 1450 ? ' is-heartbeating' : ''}`}
+                className={`font-serif attendance-percentage-val${elapsedMs >= 2250 ? ' is-heartbeating' : ''}`}
                 style={{
                   fontSize: '2.5rem',
                   fontWeight: 800,
@@ -524,15 +524,15 @@ export default function AppLaunchExperience({
               marginTop: '18px',
               fontSize: '0.85rem',
               fontWeight: 600,
-              color: '#5c584f',
+              color: 'var(--ink-soft)',
               letterSpacing: '0.02em',
               whiteSpace: 'nowrap',
               lineHeight: 1
             }}
           >
-            <span style={{ color: '#255d44', fontWeight: 700 }}>{attendedCount} Present</span>
-            <span style={{ margin: '0 8px', color: 'rgba(0,0,0,0.22)' }}>/</span>
-            <span style={{ color: '#b91c1c', fontWeight: 700 }}>{absentCount} Absent</span>
+            <span style={{ color: 'var(--good)', fontWeight: 700 }}>{attendedCount} Present</span>
+            <span style={{ margin: '0 8px', color: 'var(--ink-muted)' }}>/</span>
+            <span style={{ color: 'var(--bad)', fontWeight: 700 }}>{absentCount} Absent</span>
           </div>
         </div>
       )}

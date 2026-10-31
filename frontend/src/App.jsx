@@ -96,6 +96,8 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.__replayIntro = () => {
+        setActiveTab('today');
+        window.scrollTo({ top: 0, behavior: 'instant' });
         try { sessionStorage.removeItem('apy_intro_played'); } catch {}
         setIsHeaderBrandVisible(false);
         setIsWidgetVisible(false);

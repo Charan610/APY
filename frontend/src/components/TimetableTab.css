@@ -1,0 +1,18 @@
+.timetable-pc-grid.schedule-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .85rem;
+}
+.schedule-day, .schedule-subject, .schedule-subject-copy { min-width: 0; }
+.schedule-period { gap: .6rem; min-width: 0; }
+.schedule-subject { flex: 1 1 auto; }
+.schedule-subject > div:first-child { flex: 0 0 auto; }
+.schedule-subject-name { flex-wrap: wrap; overflow-wrap: anywhere; }
+.schedule-subject-name .subject-type-pill { flex: 0 0 auto; }
+.schedule-period-count { flex: 0 0 auto; white-space: nowrap; }
+@media (min-width: 700px) {
+  .timetable-pc-grid.schedule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1100px) {
+  .timetable-pc-grid.schedule-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

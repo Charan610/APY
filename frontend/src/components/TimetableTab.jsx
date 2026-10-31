@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Edit3, CheckCircle2, Clock, Search, Calendar, Database, Cpu, Code, BookOpen, Layers } from 'lucide-react';
 import TimetableBuilder from './TimetableBuilder';
+import './TimetableTab.css';
 
 const DAYS = [
   { weekday: 1, name: 'Monday' },
@@ -149,7 +150,7 @@ export default function TimetableTab({ user, onTimetableUpdated }) {
         )}
 
         {/* Days Grid */}
-        <div className="timetable-pc-grid">
+        <div className="timetable-pc-grid schedule-grid">
           {DAYS.map((d) => {
             const blocks = timetableData?.timetable_by_day?.[d.weekday] || [];
             const dayTotalPeriods = blocks.reduce((sum, b) => sum + (b.periods || 0), 0);
@@ -158,6 +159,7 @@ export default function TimetableTab({ user, onTimetableUpdated }) {
             return (
               <div
                 key={d.weekday}
+                className="schedule-day"
                 style={{
                   background: 'var(--surface-alt)',
                   border: '1px solid var(--rule)',
@@ -193,6 +195,7 @@ export default function TimetableTab({ user, onTimetableUpdated }) {
                       return (
                         <div 
                           key={b.id} 
+                          className="schedule-period"
                           style={{ 
                             display: 'flex', 
                             justifyContent: 'space-between', 
@@ -200,18 +203,18 @@ export default function TimetableTab({ user, onTimetableUpdated }) {
                             fontSize: '0.825rem',
                             padding: '0.45rem 0.6rem',
                             borderRadius: 'var(--radius-md)',
-                            background: query && isMatch ? 'rgba(201, 147, 59, 0.15)' : '#FFFFFF',
+                            background: query && isMatch ? 'var(--accent-gold-soft)' : 'var(--surface-soft)',
                             border: query && isMatch ? '1px solid var(--accent-gold)' : '1px solid var(--rule)',
                             opacity: query && !isMatch ? 0.35 : 1,
                             transition: 'all 0.15s ease'
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                          <div className="schedule-subject" style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
                             <div style={{ color: isLab ? 'var(--brand-forest)' : 'var(--accent-gold-dark)' }}>
                               <Icon size={15} />
                             </div>
-                            <div>
-                              <div style={{ fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <div className="schedule-subject-copy">
+                              <div className="schedule-subject-name" style={{ fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                 <span>{b.subject}</span>
                                 {isLab && <span className="subject-type-pill" style={{ fontSize: '0.6rem', padding: '0.05rem 0.35rem' }}>Lab</span>}
                               </div>
@@ -223,7 +226,7 @@ export default function TimetableTab({ user, onTimetableUpdated }) {
                             </div>
                           </div>
                           
-                          <span className="mono-num" style={{ color: 'var(--ink-soft)', fontSize: '0.75rem', fontWeight: 600, textAlign: 'right' }}>
+                          <span className="mono-num schedule-period-count" style={{ color: 'var(--ink-soft)', fontSize: '0.75rem', fontWeight: 600, textAlign: 'right' }}>
                             {b.periods} {b.periods === 1 ? 'period' : 'periods'}
                           </span>
                         </div>

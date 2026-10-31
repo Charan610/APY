@@ -1,5 +1,5 @@
-export const CURRENT_APP_VERSION = '1.4.7';
-export const CURRENT_APP_BUILD_DATE = 'October 30, 2026';
+export const CURRENT_APP_VERSION = '1.4.9';
+export const CURRENT_APP_BUILD_DATE = 'October 31, 2026';
 export const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Charan610/APY/releases/latest';
 
 /**

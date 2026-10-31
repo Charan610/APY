@@ -979,7 +979,7 @@ export default function TodayTab({
             onChange={(e) => setDayRemarks(e.target.value)}
             onBlur={handleSaveRemarks}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRemarks(); }}
-            style={{ fontSize: '0.8rem', flex: 1, padding: '0.35rem 0.6rem', background: '#FFFFFF' }}
+            style={{ fontSize: '0.8rem', flex: 1, padding: '0.35rem 0.6rem', background: 'var(--surface-soft)' }}
             autoFocus
           />
         </div>

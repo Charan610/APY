@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108"><defs><linearGradient id="blue" x2="1" y2="1"><stop stop-color="#16abd2"/><stop offset=".55" stop-color="#007da9"/><stop offset="1" stop-color="#00698e"/></linearGradient><linearGradient id="shine" x2=".7" y2="1"><stop stop-color="white" stop-opacity=".3"/><stop offset=".5" stop-color="white" stop-opacity=".03"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient></defs><g transform="translate(14 12) scale(.8)"><path d="M18 51 C32 51 40 46 51 46 C63 46 72 56 84 54" fill="none" stroke="#ff8dd6" stroke-width="2.4" stroke-linecap="round"/>
+<g fill="#fcffff" font-family="Georgia" font-weight="bold" text-anchor="middle">
+<text x="50" y="42" font-size="24" letter-spacing="2.5">ATT</text>
+<text x="50" y="72" font-size="20.5" letter-spacing="2">PERY</text></g></g></svg>

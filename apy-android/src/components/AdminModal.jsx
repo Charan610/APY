@@ -41,9 +41,9 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   // APK Updates & Push Broadcast State
   const [broadcasts, setBroadcasts] = useState([]);
   const [broadcastsLoading, setBroadcastsLoading] = useState(false);
-  const [broadcastVersion, setBroadcastVersion] = useState('1.4.8');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.8/APY.apk');
-  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.8 fixes daily Android reminders, restores alarms on app resume, and adds a distinct APY notification chime.');
+  const [broadcastVersion, setBroadcastVersion] = useState('1.4.9');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.9/APY.apk');
+  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.9 introduces the blue and pink glass theme, a matching Android icon, clearer timetables, and a refined opening animation.');
   const [broadcasting, setBroadcasting] = useState(false);
   
   const [error, setError] = useState('');
