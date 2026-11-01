@@ -57,9 +57,9 @@ function TodayAttendanceWidget({ overallPct, attendedCount, absentCount }) {
         </div>
 
         <div className="gauge-info">
-          <span className="gauge-label">Attendance</span>
+          <span className="gauge-label">Overall attendance</span>
           <span className="gauge-counts">
-            <strong className="text-good">{attendedCount}P</strong> • <strong className="text-bad">{absentCount}A</strong>
+            <strong className="text-good">{attendedCount} present</strong><span className="gauge-count-divider"> / </span><strong className="text-bad">{absentCount} absent</strong>
           </span>
         </div>
       </div>
@@ -820,8 +820,8 @@ export default function TodayTab({
               <Flame size={18} fill="var(--accent-gold)" />
             </div>
             <div>
-              <div className="streak-number">{streakDays > 0 ? `${streakDays}D` : '0D'}</div>
-              <div className="streak-label">Streak</div>
+              <div className="streak-number">{streakDays}<span className="streak-unit"> days</span></div>
+              <div className="streak-label">Current streak</div>
             </div>
           </div>
         </div>
@@ -997,7 +997,7 @@ export default function TodayTab({
 
       {/* 5. Subject Cards List */}
       {isSunday ? (
-        <div className="ledger-card" style={{ padding: '2.5rem 1.5rem', textAlign: 'center', background: 'var(--surface)' }}>
+        <div className="ledger-card" style={{ padding: '2.5rem 1.5rem', textAlign: 'center' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>☕</div>
           <h4 className="heading-ledger" style={{ color: 'var(--accent-gold-dark)', fontSize: '1.2rem' }}>
             Sunday — College Holiday
@@ -1040,7 +1040,7 @@ export default function TodayTab({
                     </div>
 
                     <div className="subject-periods-text">
-                      #{block.order_index} • {block.periods} {block.periods === 1 ? 'Period' : 'Periods'}
+                      Session {block.order_index} · {block.periods} {block.periods === 1 ? 'Period' : 'Periods'}
                     </div>
 
                     {/* Real attendance progress bar if available */}
@@ -1073,7 +1073,7 @@ export default function TodayTab({
                     title={isPastDate ? 'Select Present, then save the past date' : 'Mark Present'}
                   >
                     <Check size={14} strokeWidth={3} />
-                    <span>PRESENT</span>
+                    <span>Present</span>
                   </button>
 
                   <button
@@ -1084,7 +1084,7 @@ export default function TodayTab({
                     title={isPastDate ? 'Select Absent, then save the past date' : 'Mark Absent'}
                   >
                     <X size={14} strokeWidth={3} />
-                    <span>ABSENT</span>
+                    <span>Absent</span>
                   </button>
                 </div>
               </div>
