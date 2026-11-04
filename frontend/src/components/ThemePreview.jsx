@@ -11,6 +11,7 @@ export default function ThemePreview() {
         <button type="button" aria-pressed={theme === 'silver'} onClick={() => selectTheme('silver')}>Dark Silver</button>
         <button type="button" aria-pressed={theme === 'pink'} onClick={() => selectTheme('pink')}>Sky & Pink</button>
         <button type="button" aria-pressed={theme === 'original'} onClick={() => selectTheme('original')}>Original theme</button>
+        <button type="button" aria-pressed={theme === 'tide'} onClick={() => selectTheme('tide')}>Tide</button>
         <button type="button" onClick={() => window.__replayIntro?.()}>Replay intro</button>
       </div>
     </aside>

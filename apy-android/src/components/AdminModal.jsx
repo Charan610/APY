@@ -41,9 +41,9 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   // APK Updates & Push Broadcast State
   const [broadcasts, setBroadcasts] = useState([]);
   const [broadcastsLoading, setBroadcastsLoading] = useState(false);
-  const [broadcastVersion, setBroadcastVersion] = useState('1.4.11');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.11/APY.apk');
-  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.11 adds Original, Pink, and Silver themes in Settings, saved appearance preferences, and a matching Silver intro background.');
+  const [broadcastVersion, setBroadcastVersion] = useState('1.4.12');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.12/APY.apk');
+  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.12 adds Tide: navy, cream and coral clouds, layered motion, and frosted glass cards. Find it first in Settings → Theme.');
   const [broadcasting, setBroadcasting] = useState(false);
   
   const [error, setError] = useState('');

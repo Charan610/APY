@@ -4,6 +4,7 @@ import { getTheme, setTheme, subscribeTheme } from '../theme';
 import './ThemeSettings.css';
 
 const choices = [
+  { id: 'tide', name: 'Tide', detail: 'Navy, cream & coral drifting clouds' },
   { id: 'original', name: 'Original', detail: 'Warm paper & forest green' },
   { id: 'pink', name: 'Pink', detail: 'Blue & pink frosted glass' },
   { id: 'silver', name: 'Silver', detail: 'Dark metal & vivid accents' },

@@ -1,5 +1,5 @@
 const THEME_KEY = 'apy_theme';
-export const THEMES = ['original', 'pink', 'silver'];
+export const THEMES = ['original', 'pink', 'silver', 'tide'];
 let currentTheme = 'silver';
 try {
   const saved = localStorage.getItem(THEME_KEY);
@@ -15,7 +15,7 @@ export function applyTheme(theme) {
   if (!THEMES.includes(theme)) return;
   currentTheme = theme;
   document.documentElement.dataset.theme = theme === 'original' ? 'original' : 'sky';
-  document.documentElement.dataset.finish = theme === 'silver' ? 'silver' : '';
+  document.documentElement.dataset.finish = ['silver', 'tide'].includes(theme) ? theme : '';
 }
 export function setTheme(theme) {
   if (!THEMES.includes(theme)) return;

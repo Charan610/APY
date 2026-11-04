@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-export const CURRENT_APP_VERSION = '1.4.11';
+export const CURRENT_APP_VERSION = '1.4.12';
 export const CURRENT_APP_BUILD_DATE = 'November 4, 2026';
 export const GITHUB_RELEASES_URL = 'https://api.github.com/repos/Charan610/APY/releases/latest';
 
