@@ -30,15 +30,8 @@ export async function registerServiceWorker() {
       registration.update();
     }
 
-    // Auto-reload on controller change so users instantly get the latest app shell
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
-      }
-    });
-
+    // Activation must not interrupt the intro or a user's attendance edits.
+    // The network-first navigation handler picks up new releases on the next visit.
     await navigator.serviceWorker.ready;
     return registration;
   } catch (error) {
