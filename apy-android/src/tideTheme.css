@@ -19,7 +19,9 @@ html[data-finish="tide"] body {
 html[data-finish="tide"] body::before,
 html[data-finish="tide"] body::after {content:none;}
 .tide-atmosphere {
- position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1;
+ position:fixed;top:0;left:0;width:100%;height:100vh;height:100lvh;
+ overflow:hidden;pointer-events:none;z-index:-1;contain:layout paint;
+ transform:translateZ(0);backface-visibility:hidden;
  background:#14213d;isolation:isolate;
 }
 .tide-cloud {
@@ -178,4 +180,19 @@ html[data-finish="tide"] .extra-classes > header {border-bottom-color:rgba(244,2
  mask-image:url('/images/tide-cloud-bank.png');mask-repeat:no-repeat;mask-size:100% auto;mask-position:50% 54%;
  -webkit-mask-image:url('/images/tide-cloud-bank.png');-webkit-mask-repeat:no-repeat;-webkit-mask-size:100% auto;-webkit-mask-position:50% 54%;
  mix-blend-mode:color;opacity:.95;
+}
+
+/* Mobile chrome expands/collapses while scrolling: keep the sky's geometry stable.
+   Avoid repeatedly sampling animated clouds through every scrolling card. */
+@media (max-width: 900px), (pointer: coarse) {
+ html[data-finish="tide"] .app-viewport :is(.ledger-card,.subject-item-card,.extra-record,.today-streak-card,.forecast-day-card,.quick-action-card,.today-hero-banner,.today-attendance-widget,.extra-classes,.forecast-hero-comparison,.schedule-period,.scenario-card),
+ html[data-finish="tide"] :is(.liquid-nav-container,.desktop-nav-links,.liquid-nav-bubble) {
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+ }
+ html[data-finish="tide"] :is(.liquid-nav-container,.desktop-nav-links) {
+  background:rgba(30,42,65,.94);
+ }
+ html[data-finish="tide"] .app-viewport .quick-action-card {
+  background:linear-gradient(135deg,rgba(91,101,126,.48),rgba(45,57,82,.55));
+ }
 }

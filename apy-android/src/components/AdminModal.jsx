@@ -41,9 +41,9 @@ export default function AdminModal({ isOpen, onClose, currentUser }) {
   // APK Updates & Push Broadcast State
   const [broadcasts, setBroadcasts] = useState([]);
   const [broadcastsLoading, setBroadcastsLoading] = useState(false);
-  const [broadcastVersion, setBroadcastVersion] = useState('1.4.13');
-  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.13/APY.apk');
-  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.13 refines Tide with textured cream and coral clouds, soft blur, visible layered movement, and finer glass ribs.');
+  const [broadcastVersion, setBroadcastVersion] = useState('1.4.14');
+  const [broadcastUrl, setBroadcastUrl] = useState('https://github.com/Charan610/APY/releases/download/v1.4.14/APY.apk');
+  const [broadcastNotes, setBroadcastNotes] = useState('APY v1.4.14 improves Tide scrolling with a stable cloud background and lighter mobile glass rendering while keeping clouds moving.');
   const [broadcasting, setBroadcasting] = useState(false);
   
   const [error, setError] = useState('');
