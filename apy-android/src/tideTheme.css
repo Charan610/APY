@@ -22,31 +22,35 @@ html[data-finish="tide"] body::after {content:none;}
  position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:-1;
  background:#14213d;isolation:isolate;
 }
-.tide-cloud {position:absolute;inset:-25%;opacity:.56;will-change:transform;}
+.tide-cloud {
+ position:absolute;inset:-12% -35%;will-change:transform;
+ background-image:url('/images/tide-cloud-bank.png');
+ background-repeat:no-repeat;background-size:100% auto;
+}
 .tide-cloud-distant {
- background:radial-gradient(ellipse 35% 22% at 28% 39%,#f4ede0a8 0%,#b5b8c178 35%,transparent 74%);
- filter:blur(38px);animation:tide-distant 31s ease-in-out infinite alternate;
+ background-position:35% 22%;opacity:.5;
+ filter:blur(10px);animation:tide-distant 18s linear -6s infinite alternate;
 }
 .tide-cloud-coral {
- background:radial-gradient(ellipse 26% 30% at 64% 59%,#ff6b5bf2 0%,#ff6b5bb5 29%,#ff6b5b42 55%,transparent 76%),radial-gradient(ellipse 21% 15% at 48% 73%,#ff958880,transparent 75%);
- filter:blur(28px);animation:tide-coral 19s ease-in-out infinite alternate;
+ background-image:radial-gradient(ellipse 34% 30% at 62% 60%,#ff6b5be6 0%,#ff6b5b99 32%,transparent 78%);
+ opacity:.9;filter:blur(26px);animation:tide-coral 14s linear -4s infinite alternate;
 }
 .tide-cloud-cream {
- background:radial-gradient(ellipse 33% 14% at 20% 57%,#f4ede0c9 0%,#f4ede068 36%,transparent 76%),radial-gradient(ellipse 23% 18% at 91% 73%,#f4ede0a6,transparent 78%);
- filter:blur(25px);animation:tide-cream 25s ease-in-out infinite alternate;
+ background-position:50% 54%;opacity:.85;
+ filter:blur(6px);animation:tide-cream 16s linear -9s infinite alternate;
 }
 .tide-cloud-near {
- background:radial-gradient(ellipse 30% 10% at 61% 83%,#f4ede06b,transparent 78%),radial-gradient(ellipse 18% 21% at 79% 37%,#14213dbf,transparent 76%);
- filter:blur(22px);animation:tide-near 16s ease-in-out infinite alternate;
+ background-position:40% 88%;background-size:125% auto;opacity:.55;
+ filter:blur(12px);animation:tide-near 20s linear -3s infinite alternate;
 }
 .tide-fluted-glass {
  position:absolute;inset:0;
- background:repeating-linear-gradient(90deg,rgba(3,9,23,.42) 0px,rgba(3,9,23,.22) 1px,rgba(244,237,224,.16) 2px,rgba(244,237,224,.055) 3px,transparent 4px,rgba(3,9,23,.08) 5px,rgba(3,9,23,.32) 7px),linear-gradient(180deg,#14213d9c,transparent 28%,transparent 75%,#14213d80);
- box-shadow:inset 0 0 110px rgba(7,15,33,.25);
+ background:repeating-linear-gradient(90deg,rgba(3,9,23,.16) 0px,rgba(3,9,23,.04) 1px,rgba(244,237,224,.075) 2px,transparent 3px,rgba(3,9,23,.1) 5px),linear-gradient(180deg,#14213d80,transparent 30%,transparent 73%,#14213d66);
+ box-shadow:inset 0 0 100px rgba(7,15,33,.16);
 }
 @keyframes tide-distant {
- from {transform:translate3d(-7%,-6%,0) scale(1.05);}
- to {transform:translate3d(10%,8%,0) scale(1.16);}
+ from {transform:translate3d(-12%,-4%,0) scale(1.05);}
+ to {transform:translate3d(15%,4%,0) scale(1.1);}
 }
 @keyframes tide-coral {
  0% {transform:translate3d(9%,6%,0) scale(.95) rotate(-7deg);}
@@ -54,12 +58,12 @@ html[data-finish="tide"] body::after {content:none;}
  100% {transform:translate3d(-15%,3%,0) scale(1.18) rotate(9deg);}
 }
 @keyframes tide-cream {
- from {transform:translate3d(-10%,8%,0) rotate(-8deg);}
- to {transform:translate3d(13%,-9%,0) scale(1.08) rotate(7deg);}
+ from {transform:translate3d(-15%,4%,0) scale(1.05);}
+ to {transform:translate3d(16%,-5%,0) scale(1.12);}
 }
 @keyframes tide-near {
- from {transform:translate3d(8%,8%,0) scale(1.12);}
- to {transform:translate3d(-9%,-10%,0) scale(.97);}
+ from {transform:translate3d(14%,5%,0) scaleX(-1);}
+ to {transform:translate3d(-17%,-3%,0) scaleX(-1);}
 }
 html[data-finish="tide"] .app-viewport {background:rgba(20,33,61,.06);border-color:rgba(244,237,224,.1);}
 html[data-finish="tide"] .ledger-header {border-bottom-color:var(--rule);}
@@ -125,10 +129,10 @@ html[data-finish="tide"] .theme-preview-dot {background:#ff6b5b;}
 
 /* Reference booking-card glass: smoky grey, softly frosted, quiet edges. */
 html[data-finish="tide"] :is(.ledger-card,.subject-item-card,.extra-record,.today-streak-card,.forecast-day-card,.quick-action-card,.today-hero-banner,.today-attendance-widget,.extra-classes,.forecast-hero-comparison,.schedule-period,.scenario-card) {
- background:linear-gradient(135deg,rgba(88,99,125,.58),rgba(42,54,80,.66));
+ background:linear-gradient(135deg,rgba(91,101,126,.48),rgba(45,57,82,.55));
  border:1px solid rgba(244,237,224,.14);
  border-radius:14px;
- backdrop-filter:blur(18px) saturate(.75);-webkit-backdrop-filter:blur(18px) saturate(.75);
+ backdrop-filter:blur(24px) saturate(.85);-webkit-backdrop-filter:blur(24px) saturate(.85);
  box-shadow:inset 0 1px 0 rgba(244,237,224,.19),inset 0 -1px 0 rgba(8,15,32,.2),0 12px 28px rgba(5,12,28,.22);
 }
 html[data-finish="tide"] .subject-item-card::before {display:none;}
@@ -166,3 +170,12 @@ html[data-finish="tide"] .today-hero-banner {
 html[data-finish="tide"] .ribbon-day-cell.active {background:rgba(244,237,224,.17);border-color:rgba(244,237,224,.3);}
 html[data-finish="tide"] .quick-action-card {min-height:98px;}
 html[data-finish="tide"] .extra-classes > header {border-bottom-color:rgba(244,237,224,.1);}
+
+/* Sunset colour follows the actual cloud silhouette. */
+.tide-cloud-cream::after {
+ content:'';position:absolute;inset:0;
+ background:linear-gradient(110deg,#f4ede0 12%,#f4ede0 28%,#ff6b5b 59%,#ff6b5b 80%,#f4ede0);
+ mask-image:url('/images/tide-cloud-bank.png');mask-repeat:no-repeat;mask-size:100% auto;mask-position:50% 54%;
+ -webkit-mask-image:url('/images/tide-cloud-bank.png');-webkit-mask-repeat:no-repeat;-webkit-mask-size:100% auto;-webkit-mask-position:50% 54%;
+ mix-blend-mode:color;opacity:.95;
+}
