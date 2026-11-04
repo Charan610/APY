@@ -1,0 +1,24 @@
+.theme-settings { padding: .5rem 0 1.5rem; }
+.theme-settings-heading { display:flex; align-items:center; gap:.7rem; color:var(--ink); }
+.theme-settings-heading h3 { margin:0; font-size:1.15rem; }
+.theme-settings > p { color:var(--ink-soft); font-size:.85rem; line-height:1.65; margin:.7rem 0 1.4rem; }
+.theme-choice-list { display:grid; gap:.85rem; }
+.theme-choice { display:flex; align-items:center; gap:1rem; padding:.85rem; border:1px solid var(--rule); border-radius:17px; background:var(--surface-soft); color:var(--ink); cursor:pointer; text-align:left; font:inherit; width:100%; min-height:92px; transition:border-color .18s,background .18s; }
+.theme-choice.selected { border-color:var(--accent-gold); background:var(--accent-gold-soft); }
+.theme-choice:hover { border-color:var(--rule-strong); }
+.theme-choice:focus-visible { outline:3px solid var(--accent-gold); outline-offset:3px; }
+.theme-swatch { width:78px; height:64px; border-radius:11px; display:grid; place-items:center; overflow:hidden; flex-shrink:0; border:1px solid rgba(255,255,255,.2); }
+.theme-swatch-original { background:linear-gradient(135deg,#f4efdf,#d7ddcb); }
+.theme-swatch-pink { background:repeating-linear-gradient(90deg,transparent 0 7px,#ffffff12 7px 8px),linear-gradient(125deg,#087b9f,#cd509e); }
+.theme-swatch-silver { background:repeating-linear-gradient(90deg,transparent 0 7px,#ffffff09 7px 8px),linear-gradient(125deg,#163e58,#171b26,#533369); }
+.theme-swatch-panel { display:grid; gap:5px; width:50px; padding:8px; border:1px solid #ffffff50; background:#ffffff17; border-radius:8px; }
+.theme-swatch-panel i { display:block; height:3px; width:100%; background:#eee; border-radius:3px; }
+.theme-swatch-panel i:last-child { width:55%; }
+.theme-swatch-original .theme-swatch-panel { background:#f9f7ed; border-color:#c4c9b6; }
+.theme-swatch-original i { background:#3d5d47; }
+.theme-choice-copy { flex:1; min-width:0; display:grid; gap:.3rem; }
+.theme-choice-copy strong { font-weight:600; font-size:.95rem; }
+.theme-choice-copy > span { color:var(--ink-soft); font-size:.75rem; line-height:1.5; }
+.theme-choice-check { width:25px; height:25px; border:1px solid var(--rule); border-radius:50%; display:grid; place-items:center; flex-shrink:0; }
+.theme-choice.selected .theme-choice-check { background:var(--accent-gold); color:var(--bg); border-color:transparent; }
+@media(prefers-reduced-motion:reduce) { .theme-choice { transition:none; } }

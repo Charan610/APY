@@ -48,6 +48,7 @@ import {
   installAppUpdate
 } from '../updateChecker';
 import BrandLogo from './BrandLogo';
+import ThemeSettings from './ThemeSettings';
 
 const GithubIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -724,6 +725,7 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
 
         {/* Organized Tabs Selector */}
         <div className="settings-tabs">
+          <button type="button" className={`btn settings-tab-button ${activeTab === 'theme' ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={activeTab === 'theme'} onClick={() => { setActiveTab('theme'); setMsg(''); setError(''); }}><Sparkles size={13} /> Theme</button>
           <button
             type="button"
             className={`btn settings-tab-button ${activeTab === 'profile' ? 'btn-primary' : 'btn-secondary'}`}
@@ -846,6 +848,8 @@ export default function SettingsModal({ isOpen, onClose, user, onUserUpdated, on
         )}
 
         {/* TAB 1: Profile & Section */}
+        {activeTab === 'theme' && <ThemeSettings />}
+
         {activeTab === 'profile' && (
           <div>
             <form onSubmit={handleSaveProfile}>
