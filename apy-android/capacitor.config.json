@@ -16,8 +16,13 @@
       "showSpinner": false
     },
     "StatusBar": {
-      "style": "LIGHT",
-      "backgroundColor": "#057eaa"
+      "style": "DARK",
+      "backgroundColor": "#14213d",
+      "overlaysWebView": true
     }
+  },
+  "android": {
+    "adjustMarginsForEdgeToEdge": "force",
+    "backgroundColor": "#14213d"
   }
 }

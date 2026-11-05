@@ -1,5 +1,5 @@
 /* Tide: reference palette, fluted glass, and drifting cream/coral atmosphere. */
-html[data-finish="tide"] {
+:root[data-finish="tide"] {
  --bg:#14213d; --bg-parchment:#14213d; --surface:#1c2a45;
  --surface-alt:rgba(244,237,224,.08); --surface-soft:rgba(20,33,61,.28); --surface-hover:#2a3851;
  --ink:#f4ede0; --ink-soft:#e1dbd3; --ink-muted:#bfc2cb;
